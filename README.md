@@ -1,73 +1,34 @@
-# React + TypeScript + Vite
+# FairShare
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+FairShare is a web application that helps groups track shared expenses and calculate how much each person owes. Instead of traditional accounts, users log in using their Cardano crypto wallet, making the wallet address their unique identity. Expenses are recorded off-chain, while payments happen directly through ADA transactions between wallets, removing intermediaries.
 
-Currently, two official plugins are available:
+## What It Does
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+A web application that helps a group of users track shared expenses and calculate how much each person owes.
+Instead of using accounts with emails, users log in using their crypto wallet on Cardano, making each wallet address their unique identity.
+The app records expenses off-chain, while payments are done directly through ADA transactions between wallets. This removes the need for intermediaries like banks or third-party apps.
 
-## React Compiler
+## Key Features
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Wallet-based login (no username/password)
+- Group expense tracking
+- Automatic debt calculation (who owes who)
+- ADA payment integration (manual transfer)
+- Payment status tracking (paid/unpaid)
+- Transaction history viewer
 
-## Expanding the ESLint configuration
+## Run Locally
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. Navigate to the frontend folder:
+```bash
+cd frontend
 ```
-
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
-
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+2. Install dependencies (first time or after cloning):
+```bash
+cd npm install
+```
+3. Start the dev server:
+   `npm run dev`
+```bash
+npm run dev
 ```
