@@ -2,13 +2,16 @@ import React, { useState } from "react";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Landing from "./pages/Landing";
+import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Groups from "./pages/Groups";
 import CreateGroup from "./pages/CreateGroup";
 import GroupDetails from "./pages/GroupDetails";
 import Settings from "./pages/Settings";
 
 type Page =
   | "landing"
+  | "login"
   | "dashboard"
   | "groups"
   | "group-details"
@@ -17,8 +20,7 @@ type Page =
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [displayName, setDisplayName] = useState("Aditya");
+  const [walletAddress, setWalletAddress] = useState("0xA3b1F9C2D7E4b8a1c4f7D0b9E2a5C8f1d9B3A7E4");
 
   const navigate = (page: Page) => {
     setCurrentPage(page);
@@ -26,12 +28,10 @@ const App: React.FC = () => {
   };
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
-    navigate("dashboard");
+    navigate("login");
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
     navigate("landing");
   };
 
@@ -57,11 +57,11 @@ const App: React.FC = () => {
             </div>
           </div>
         </header>
-      ) : (
+      ) : currentPage === "login" ? null : (
         <Header
           currentPage={currentPage}
           onNavigate={navigate}
-          displayName={displayName}
+          walletAddress={walletAddress}
           onLogout={handleLogout}
         />
       )}
@@ -72,8 +72,21 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {(currentPage === "dashboard" || currentPage === "groups") && (
+      {currentPage === "login" && (
+        <Login
+          onLogin={(address) => {
+            setWalletAddress(address);
+            navigate("dashboard");
+          }}
+        />
+      )}
+
+      {currentPage === "dashboard" && (
         <Dashboard onNavigate={navigate} />
+      )}
+
+      {currentPage === "groups" && (
+        <Groups onNavigate={navigate} />
       )}
 
       {currentPage === "create-group" && (
@@ -81,13 +94,12 @@ const App: React.FC = () => {
       )}
 
       {currentPage === "group-details" && (
-        <GroupDetails onNavigate={navigate} />
+        <GroupDetails />
       )}
 
       {currentPage === "settings" && (
         <Settings
-          displayName={displayName}
-          onDisplayNameChange={setDisplayName}
+          walletAddress={walletAddress}
           onNavigate={navigate}
         />
       )}
