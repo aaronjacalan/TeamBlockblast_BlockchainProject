@@ -6,7 +6,7 @@ const Footer: React.FC = () => {
       <div className="container footer-inner">
         <div className="footer-brand">
           <span className="footer-logo">FairShare</span>
-          <p className="footer-copy">© 2024 FairShare. Built on Cardano.</p>
+          <p className="footer-copy">© 2026 FairShare. All rights reserved.</p>
         </div>
 
         <nav className="footer-links">
