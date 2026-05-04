@@ -12,7 +12,7 @@ export interface Group {
   id: string;
   icon: string;
   name: string;
-  sub: string;
+  description: string;
   badge: string;
   badgeVariant: "purple" | "zinc";
   balance: string;
@@ -38,10 +38,6 @@ export interface Member {
   isYou: boolean;
 }
 
-export interface Category {
-  icon: string;
-  label: string;
-}
 
 export interface GroupMember {
   id: string;
@@ -83,7 +79,7 @@ export const groups: Group[] = [
     id: "ski-trip",
     icon: "downhill_skiing",
     name: "Ski Trip 2024",
-    sub: "Baguio, Philippines",
+    description: "Baguio, Philippines",
     badge: "Active",
     badgeVariant: "purple",
     balance: "+₱850.00",
@@ -93,7 +89,7 @@ export const groups: Group[] = [
     id: "apartment",
     icon: "home_work",
     name: "Apartment Expenses",
-    sub: "Shared Rent & Utilities",
+    description: "Shared rent, utilities, and groceries.",
     badge: "Monthly",
     badgeVariant: "zinc",
     balance: "-₱320.15",
@@ -103,7 +99,7 @@ export const groups: Group[] = [
     id: "dinner",
     icon: "restaurant",
     name: "Weekly Dinner",
-    sub: "4 Participants",
+    description: "Rotating hosts for Friday night dinner.",
     badge: "Settling",
     badgeVariant: "zinc",
     balance: "₱0.00",
@@ -171,12 +167,6 @@ export const members: Member[] = [
   },
 ];
 
-export const categories: Category[] = [
-  { icon: "flight", label: "Trip" },
-  { icon: "home", label: "Home" },
-  { icon: "favorite", label: "Couple" },
-  { icon: "more_horiz", label: "Other" },
-];
 
 export const groupMembers: GroupMember[] = [
   {

@@ -314,19 +314,12 @@ const GroupDetails: React.FC = () => {
               </div>
 
               <div className="modal-field">
-                <label className="modal-label">Category Icon</label>
-                <div className="modal-icon-grid">
-                  {EXPENSE_ICONS.map((icon) => (
-                    <button
-                      key={icon}
-                      className={`modal-icon-btn ${expenseIcon === icon ? "modal-icon-btn-active" : ""}`}
-                      onClick={() => setExpenseIcon(icon)}
-                      title={icon}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 20 }}>{icon}</span>
-                    </button>
-                  ))}
-                </div>
+                <label className="modal-label">Short Description</label>
+                <textarea
+                  className="modal-input"
+                  placeholder="Add a quick note for this expense..."
+                  rows={3}
+                />
               </div>
             </div>
 

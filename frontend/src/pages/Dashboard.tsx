@@ -6,9 +6,10 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 
 interface DashboardProps {
   onNavigate: (page: Page) => void;
+  onCreateGroup: () => void;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup }) => {
   return (
     <main className="dashboard page-offset">
       <div className="container dashboard-inner">
@@ -78,7 +79,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </button>
                 <button
                   className="btn btn-primary db-create-big"
-                  onClick={() => onNavigate("create-group")}
+                  onClick={onCreateGroup}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
                     add
@@ -105,7 +106,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                     {g.name}
                   </h4>
                   <p className="text-body-md" style={{ color: "var(--color-zinc-400)", marginTop: 4 }}>
-                    {g.sub}
+                    {g.description}
                   </p>
                   <div className="db-group-card-footer">
                     <span className="text-label-sm" style={{ color: "var(--color-zinc-500)" }}>

@@ -57,7 +57,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 </button>
 
                 <div className="login-divider">
-                  <span>or information</span>
+                  <span>some useful information</span>
                 </div>
 
                 <div className="login-info-grid">

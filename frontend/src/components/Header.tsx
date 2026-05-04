@@ -44,7 +44,7 @@ const Header: React.FC<HeaderProps> = ({
         onClick={() => onNavigate("landing")}
         style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
           >
-        <img src="/src/assets/logo.svg" alt="FairShare" width={32} height={32} />
+        <img src="/logo.svg" alt="FairShare" width={32} height={32} />
         <span style={{ fontSize: "18px", fontWeight: "700", color: "#732ee4" }}>
         Fair<span style={{ color: "#000000" }}>Share</span>
         </span>

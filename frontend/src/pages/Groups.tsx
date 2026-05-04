@@ -6,6 +6,7 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 
 interface GroupsProps {
   onNavigate: (page: Page) => void;
+  onCreateGroup: () => void;
 }
 
 const avatarUrls = [
@@ -17,7 +18,7 @@ const avatarUrls = [
   "https://lh3.googleusercontent.com/aida-public/AB6AXuB2DZLae-kHP31rAF9J4AqRE6IvjrXYG0bYmjIfZQBg9-VR75sYewEQO4JMASy6xYhDyUJ9ko9dE0SCM5V54x4S5Un71BKGWaubZwX6a4s7sZsMT9xOTx8NHkx-scTxwEVfT-Q_rKpPgSXgfkfExfHpRz76C5Nkl7E3B_u73icYrgLyahDmlxRmHB3QfAdsaIi51Xw7A5HRXhfGQSSBSrzIze84Bx-EKKRNXaXG_QBTiHtxv9aSCXfgw3ML0P9_Vk8z78tElEw7pg_6"
 ];
 
-const Groups: React.FC<GroupsProps> = ({ onNavigate }) => {
+const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup }) => {
   const [query, setQuery] = useState("");
 
   const activeGroups = groups;
@@ -47,7 +48,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigate }) => {
               Manage your shared expenses across trips, home, and social circles.
             </p>
           </div>
-          <button className="groups-create-btn" onClick={() => onNavigate("create-group")}>
+          <button className="groups-create-btn" onClick={onCreateGroup}>
             <span className="material-symbols-outlined" style={{ fontSize: 22 }}>add</span>
             Create New Group
           </button>
@@ -65,10 +66,6 @@ const Groups: React.FC<GroupsProps> = ({ onNavigate }) => {
             />
           </div>
           <div className="groups-filters">
-            <button className="groups-filter-btn">
-              <span className="material-symbols-outlined" style={{ fontSize: 18 }}>filter_list</span>
-              Category
-            </button>
             <button className="groups-filter-btn">
               <span className="material-symbols-outlined" style={{ fontSize: 18 }}>sort</span>
               Recent
@@ -106,6 +103,9 @@ const Groups: React.FC<GroupsProps> = ({ onNavigate }) => {
                     </div>
                   </div>
                   <h3 className="text-headline-sm groups-card-title">{g.name}</h3>
+                  <p className="text-body-md" style={{ color: "var(--color-zinc-400)", marginTop: 4 }}>
+                    {g.description}
+                  </p>
                   <div className="groups-card-meta">
                     <span>
                       <span className="material-symbols-outlined" style={{ fontSize: 16 }}>group</span>

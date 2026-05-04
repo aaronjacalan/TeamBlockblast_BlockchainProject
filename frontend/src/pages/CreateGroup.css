@@ -17,8 +17,121 @@
   padding: 32px;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 20px;
   border-radius: var(--radius-xl);
+}
+
+/* ── Modal Variant ───────────────────────────────────────────────────────── */
+.modal-box.cg-modal-box {
+  width: min(98vw, 1280px);
+  max-width: 1280px;
+  max-height: 92vh;
+  overflow: hidden;
+}
+
+.cg-modal-body {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow: visible;
+  max-height: none;
+}
+
+.cg-modal-body .cg-card {
+  border: none;
+  padding: 18px 24px 16px;
+  border-radius: 0;
+}
+
+.cg-modal-body .cg-info-alert {
+  margin-top: 0;
+  border: 1px solid var(--color-zinc-100);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+
+.cg-modal-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 22px;
+  padding: 6px 24px 20px;
+  align-items: start;
+}
+
+.cg-side {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.cg-side-card {
+  background: #fff;
+  border: 1px solid var(--color-zinc-200);
+  border-radius: var(--radius-xl);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+}
+
+.cg-side-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.cg-member-list {
+  max-height: min(58vh, 520px);
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-color: var(--color-zinc-400) transparent;
+  scrollbar-width: thin;
+}
+
+.cg-member-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.cg-member-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.cg-member-list::-webkit-scrollbar-thumb {
+  background: var(--color-zinc-400);
+  border-radius: 999px;
+}
+
+.cg-member-list::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+@media (max-width: 1024px) {
+  .cg-modal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cg-member-list {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 600px) {
+  .cg-modal-box {
+    width: 94vw;
+    max-height: 94vh;
+  }
+
+  .cg-modal-body .cg-card {
+    padding: 16px 18px 20px;
+  }
+
+  .cg-modal-body .cg-info-alert {
+    padding: 16px 18px 20px;
+  }
 }
 
 /* ── Identity ─────────────────────────────────────────────────────────────── */
@@ -57,6 +170,20 @@
   gap: 8px;
 }
 
+.cg-desc-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.cg-desc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
 .cg-label {
   display: block;
   font-size: 11px;
@@ -80,6 +207,33 @@
   transition: border-color 0.2s;
 }
 
+.cg-desc-input {
+  width: 100%;
+  border: 1px solid var(--color-zinc-200);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-family: var(--font-family);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-on-surface);
+  background: var(--color-surface-container-low);
+  outline: none;
+  resize: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.cg-desc-input:focus {
+  border-color: var(--color-tertiary);
+  background: #fff;
+}
+
+.cg-desc-count {
+  display: block;
+  font-size: 11px;
+  color: var(--color-zinc-500);
+  text-align: right;
+}
+
 .cg-name-input::placeholder {
   color: var(--color-zinc-300);
 }
@@ -89,45 +243,6 @@
 }
 
 /* ── Section ──────────────────────────────────────────────────────────────── */
-.cg-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-/* ── Categories ───────────────────────────────────────────────────────────── */
-.cg-categories {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.cg-category-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
-  border-radius: var(--radius-full);
-  font-family: var(--font-family);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  border: 1px solid var(--color-zinc-200);
-  color: var(--color-zinc-500);
-  background: transparent;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.cg-category-btn:hover {
-  border-color: var(--color-zinc-400);
-}
-
-.cg-category-btn-active {
-  border-color: var(--color-tertiary);
-  background: var(--color-tertiary-light);
-  color: var(--color-tertiary);
-}
 
 /* ── Invite ───────────────────────────────────────────────────────────────── */
 .cg-invite-row {
@@ -269,4 +384,8 @@
   display: flex;
   gap: 20px;
   align-items: flex-start;
+}
+.cg-info-alert .text-body-md {
+  font-size: 13px;
+  line-height: 1.5;
 }
