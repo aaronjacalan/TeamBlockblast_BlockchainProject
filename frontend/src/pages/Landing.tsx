@@ -12,19 +12,7 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
       <section className="hero">
         <div className="container hero-grid">
           <div className="hero-copy">
-            <div className="hero-badge">
-              <span
-                className="material-symbols-outlined"
-                style={{
-                  fontSize: 14,
-                  fontVariationSettings: '"FILL" 1',
-                  color: "var(--color-tertiary)",
-                }}
-              >
-                bolt
-              </span>
-              <span>FairShare</span>
-            </div>
+           
 
             <h1 className="hero-headline">
               Split Expenses with{" "}
