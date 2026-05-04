@@ -2,7 +2,7 @@ import React from "react";
 import "./Dashboard.css";
 import { activityItems, groups, CURRENCY } from "../data";
 
-type Page = "landing" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
+type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface DashboardProps {
   onNavigate: (page: Page) => void;
@@ -77,8 +77,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                   </span>
                 </button>
                 <button
-                  className="btn btn-primary"
-                  style={{ fontSize: 13, padding: "8px 14px" }}
+                  className="btn btn-primary db-create-big"
                   onClick={() => onNavigate("create-group")}
                 >
                   <span className="material-symbols-outlined" style={{ fontSize: 16 }}>

@@ -1,32 +1,24 @@
 import React, { useState } from "react";
 
-type Page = "landing" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
+type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface SettingsProps {
-  displayName: string;
-  onDisplayNameChange: (name: string) => void;
+  walletAddress: string;
   onNavigate: (page: Page) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, onNavigate }) => {
-  const [nameInput, setNameInput] = useState(displayName);
+const Settings: React.FC<SettingsProps> = ({ walletAddress, onNavigate }) => {
   const [email, setEmail] = useState("aditya@email.com");
   const [saved, setSaved] = useState(false);
   const [groupActivity, setGroupActivity] = useState(true);
   const [settlements, setSettlements] = useState(true);
 
   const handleSave = () => {
-    onDisplayNameChange(nameInput.trim() || displayName);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };
 
-  const initials = nameInput
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
   return (
     <main className="page-offset">
@@ -63,9 +55,9 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
           <section className="card" style={{ padding: 32 }}>
             <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 28 }}>
               <div>
-                <h2 className="text-headline-sm">Profile Identity</h2>
+                <h2 className="text-headline-sm">Wallet & Notifications</h2>
                 <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 4 }}>
-                  How you appear to other members in groups.
+                  Your connected wallet and where to send updates.
                 </p>
               </div>
               <div
@@ -78,13 +70,13 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: 22,
+                  fontSize: 18,
                   fontWeight: 700,
                   letterSpacing: "-0.02em",
                   fontFamily: "var(--font-family)",
                 }}
               >
-                {initials || "?"}
+                {walletAddress.slice(-2).toUpperCase()}
               </div>
             </div>
 
@@ -101,7 +93,7 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
                     marginBottom: 8,
                   }}
                 >
-                  Display Name
+                  Connected Wallet
                 </label>
                 <input
                   style={{
@@ -120,10 +112,8 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
                     boxSizing: "border-box",
                   }}
                   type="text"
-                  value={nameInput}
-                  onChange={(e) => setNameInput(e.target.value)}
-                  onFocus={(e) => (e.currentTarget.style.borderBottomColor = "var(--color-tertiary)")}
-                  onBlur={(e) => (e.currentTarget.style.borderBottomColor = "var(--color-zinc-200)")}
+                  value={walletShort}
+                  readOnly
                 />
               </div>
 
@@ -139,7 +129,7 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
                     marginBottom: 8,
                   }}
                 >
-                  Email Address
+                  Notification Email
                 </label>
                 <input
                   style={{
@@ -181,9 +171,9 @@ const Settings: React.FC<SettingsProps> = ({ displayName, onDisplayNameChange, o
                   )}
                 </button>
                 {saved && (
-                  <p style={{ fontSize: 13, color: "var(--color-tertiary)", fontWeight: 600 }}>
-                    Your display name has been updated.
-                  </p>
+                      <p style={{ fontSize: 13, color: "var(--color-tertiary)", fontWeight: 600 }}>
+                      Notification email saved.
+                      </p>
                 )}
               </div>
             </div>

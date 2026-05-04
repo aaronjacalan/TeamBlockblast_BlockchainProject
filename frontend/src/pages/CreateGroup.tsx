@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import "./CreateGroup.css";
 import { categories, groupMembers } from "../data";
 
-type Page = "landing" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
+type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface CreateGroupProps {
   onNavigate: (page: Page) => void;

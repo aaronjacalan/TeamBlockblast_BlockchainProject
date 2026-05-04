@@ -225,6 +225,12 @@
   min-height: 160px;
 }
 
+.db-create-big {
+  padding: 16px 26px;
+  font-size: 16px;
+  border-radius: 14px;
+}
+
 .db-new-group-card:hover {
   border-color: var(--color-tertiary);
   color: var(--color-tertiary);
