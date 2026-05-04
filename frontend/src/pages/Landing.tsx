@@ -43,20 +43,6 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
               </button>
 
             </div>
-
-            <div className="hero-trust">
-              {[
-                { icon: "verified", label: "Audit Verified" },
-                { icon: "public", label: "Open Source" },
-              ].map(({ icon, label }) => (
-                <div key={label} className="hero-trust-item">
-                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                    {icon}
-                  </span>
-                  <span>{label}</span>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="hero-visual">

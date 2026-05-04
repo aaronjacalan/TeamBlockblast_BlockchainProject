@@ -8,27 +8,7 @@ const Footer: React.FC = () => {
           <span className="footer-logo">FairShare</span>
           <p className="footer-copy">© 2026 FairShare. All rights reserved.</p>
         </div>
-
-        <nav className="footer-links">
-          {["Security", "Terms", "API", "Status"].map((link) => (
-            <a key={link} href="#">
-              {link}
-            </a>
-          ))}
-        </nav>
-
-        <div className="footer-social">
-          <button className="social-btn">
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              share
-            </span>
-          </button>
-          <button className="social-btn">
-            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>
-              code
-            </span>
-          </button>
-        </div>
+        
       </div>
     </footer>
   );

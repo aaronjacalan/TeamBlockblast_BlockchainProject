@@ -447,6 +447,7 @@ textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   gap: 24px;
   padding: 32px 24px;
 }
@@ -460,8 +461,11 @@ textarea {
 
 .footer-brand {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: nowrap;
+  justify-content: center;
 }
 
 .footer-logo {
@@ -473,6 +477,7 @@ textarea {
 .footer-copy {
   font-size: 12px;
   color: var(--color-zinc-500);
+  white-space: nowrap;
 }
 
 .footer-links {
