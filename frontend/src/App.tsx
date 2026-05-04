@@ -103,8 +103,7 @@ const App: React.FC = () => {
           onNavigate={navigate}
         />
       )}
-
-      <Footer />
+      {currentPage !== "login" && <Footer />}
     </>
   );
 };

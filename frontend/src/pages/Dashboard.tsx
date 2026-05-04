@@ -118,15 +118,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                 </button>
               ))}
 
-              <button
-                className="db-new-group-card"
-                onClick={() => onNavigate("create-group")}
-              >
-                <span className="material-symbols-outlined" style={{ fontSize: 36, marginBottom: 8 }}>
-                  add_circle
-                </span>
-                <span className="text-label-md">Create New Group</span>
-              </button>
             </div>
           </section>
 
