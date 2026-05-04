@@ -1,18 +1,18 @@
 import React, { useState, useRef, useEffect } from "react";
 
-type Page = "landing" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
+type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface HeaderProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
-  displayName: string;
+  walletAddress: string;
   onLogout: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
   currentPage,
   onNavigate,
-  displayName,
+  walletAddress,
   onLogout,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -33,12 +33,7 @@ const Header: React.FC<HeaderProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  const initials = displayName
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+  const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
   return (
     <header className="header">
@@ -121,9 +116,9 @@ const Header: React.FC<HeaderProps> = ({
                   flexShrink: 0,
                 }}
               >
-                {initials}
+                {walletAddress.slice(-2).toUpperCase()}
               </div>
-              {displayName}
+              {walletShort}
               <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--color-zinc-400)" }}>
                 expand_more
               </span>
@@ -145,8 +140,8 @@ const Header: React.FC<HeaderProps> = ({
                 }}
               >
                 <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-zinc-100)" }}>
-                  <p style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>{displayName}</p>
-                  <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 2 }}>Personal Account</p>
+                  <p style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>Wallet Connected</p>
+                  <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 2 }}>{walletShort}</p>
                 </div>
                 <button
                   onClick={() => { setMenuOpen(false); onNavigate("settings"); }}
