@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import "./GroupDetails.css";
 import { expenses as initialExpenses, members as initialMembers, CURRENCY } from "../data";
 
-const EXPENSE_ICONS = ["chalet","restaurant","shopping_cart","flight","local_gas_station","sports_basketball","movie","local_bar","directions_car","hotel"];
-
 const GroupDetails: React.FC = () => {
   const [expenseList, setExpenseList] = useState(initialExpenses);
   const [memberList, setMemberList] = useState(initialMembers);

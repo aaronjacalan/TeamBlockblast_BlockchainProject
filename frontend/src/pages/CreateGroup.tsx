@@ -2,8 +2,6 @@ import React, { useState } from "react";
 import "./CreateGroup.css";
 import { groupMembers } from "../data";
 
-type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
-
 interface CreateGroupProps {
   onClose: () => void;
   onCreated: () => void;
