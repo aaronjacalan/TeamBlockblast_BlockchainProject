@@ -11,8 +11,6 @@ interface CreateGroupProps {
 const CreateGroup: React.FC<CreateGroupProps> = ({ onNavigate }) => {
   const [selectedCategory, setSelectedCategory] = useState("Trip");
   const [groupName, setGroupName] = useState("");
-  const [inviteInput, setInviteInput] = useState("");
-  const [inviteEmail, setInviteEmail] = useState("");
   const [members, setMembers] = useState(groupMembers);
   const [hoveredMember, setHoveredMember] = useState<string | null>(null);
 

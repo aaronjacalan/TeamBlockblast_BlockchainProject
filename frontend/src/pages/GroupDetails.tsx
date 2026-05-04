@@ -2,15 +2,9 @@ import React, { useState } from "react";
 import "./GroupDetails.css";
 import { expenses as initialExpenses, members as initialMembers, CURRENCY } from "../data";
 
-type Page = "landing" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
-
-interface GroupDetailsProps {
-  onNavigate: (page: Page) => void;
-}
-
 const EXPENSE_ICONS = ["chalet","restaurant","shopping_cart","flight","local_gas_station","sports_basketball","movie","local_bar","directions_car","hotel"];
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ onNavigate }) => {
+const GroupDetails: React.FC = () => {
   const [expenseList, setExpenseList] = useState(initialExpenses);
   const [memberList, setMemberList] = useState(initialMembers);
   const [hoveredExpense, setHoveredExpense] = useState<string | null>(null);

@@ -15,9 +15,8 @@ type Page =
   | "create-group"
   | "settings";
 
-const App: React.FC = () => {
+  const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [displayName, setDisplayName] = useState("Aditya");
 
   const navigate = (page: Page) => {
@@ -26,12 +25,10 @@ const App: React.FC = () => {
   };
 
   const handleLogin = () => {
-    setIsLoggedIn(true);
     navigate("dashboard");
   };
 
   const handleLogout = () => {
-    setIsLoggedIn(false);
     navigate("landing");
   };
 
@@ -77,8 +74,8 @@ const App: React.FC = () => {
         <CreateGroup onNavigate={navigate} />
       )}
 
-      {currentPage === "group-details" && (
-        <GroupDetails onNavigate={navigate} />
+  {currentPage === "group-details" && (
+        <GroupDetails />
       )}
 
       {currentPage === "settings" && (
