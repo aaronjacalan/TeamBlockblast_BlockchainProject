@@ -1,11 +1,20 @@
 import React, { useState } from "react";
+import { useWallet } from "@meshsdk/react";
+import { Transaction, BlockfrostProvider } from "@meshsdk/core";
 import "./GroupDetails.css";
 import { expenses as initialExpenses, members as initialMembers, CURRENCY } from "../data";
 
 const GroupDetails: React.FC = () => {
+  const { wallet, connected } = useWallet();
   const [expenseList, setExpenseList] = useState(initialExpenses);
   const [memberList, setMemberList] = useState(initialMembers);
   const [hoveredExpense, setHoveredExpense] = useState<string | null>(null);
+
+  // Settle Up Modal
+  const [showSettleUpModal, setShowSettleUpModal] = useState(false);
+  const [settleUpAddress, setSettleUpAddress] = useState("");
+  const [settleUpAmount, setSettleUpAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Add Expense Modal
   const [showExpenseModal, setShowExpenseModal] = useState(false);
@@ -77,6 +86,49 @@ const GroupDetails: React.FC = () => {
 
   const memberToDeleteObj = memberList.find((m) => m.id === memberToDelete);
 
+  const submitSettleUp = async () => {
+    if (!connected) {
+      alert("Please connect your wallet first.");
+      return;
+    }
+    if (!settleUpAddress || !settleUpAmount) {
+      alert("Please enter a valid address and amount.");
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      
+      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
+      if (!blockfrostApiKey) {
+        alert("Blockfrost API Key is missing in environment variables.");
+        return;
+      }
+      
+      const blockfrostProvider = new BlockfrostProvider(blockfrostApiKey);
+      // Disable strict type checking for initiator due to Mesh SDK v1 / v2 version mismatch
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const tx = new Transaction({ initiator: wallet as any });
+      
+      const amountInLovelace = Math.floor(parseFloat(settleUpAmount) * 1000000).toString();
+      tx.sendLovelace(settleUpAddress, amountInLovelace);
+      
+      const unsignedTx = await tx.build();
+      const signedTx = await wallet.signTx(unsignedTx, true);
+      const txHash = await blockfrostProvider.submitTx(signedTx);
+      
+      alert(`Transaction successful!\nHash: ${txHash}`);
+      setShowSettleUpModal(false);
+      setSettleUpAddress("");
+      setSettleUpAmount("");
+    } catch (error) {
+      console.error("Transaction failed:", error);
+      alert("Transaction failed. See console for details.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <>
       <main className="group-details page-offset">
@@ -102,7 +154,7 @@ const GroupDetails: React.FC = () => {
               </div>
 
               <div className="gd-header-actions">
-                <button className="btn btn-secondary">
+                <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
                   Settle Up
                 </button>
@@ -399,6 +451,58 @@ const GroupDetails: React.FC = () => {
                 onClick={handleDeleteMember}
               >
                 Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Settle Up Modal ─────────────────── */}
+      {showSettleUpModal && (
+        <div className="modal-backdrop" onClick={() => setShowSettleUpModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-headline-sm">Settle Up via Cardano</h2>
+              <button className="modal-close-btn" onClick={() => setShowSettleUpModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p className="text-body-md" style={{ marginBottom: "16px", color: "var(--color-zinc-500)" }}>
+                Send testnet ADA (tADA) directly to a member's wallet address using your connected wallet.
+              </p>
+              <div className="modal-field">
+                <label className="modal-label">Recipient Testnet Address</label>
+                <input
+                  className="modal-input"
+                  type="text"
+                  placeholder="addr_test1..."
+                  value={settleUpAddress}
+                  onChange={(e) => setSettleUpAddress(e.target.value)}
+                />
+              </div>
+
+              <div className="modal-field">
+                <label className="modal-label">Amount (ADA)</label>
+                <input
+                  className="modal-input"
+                  type="number"
+                  min="0"
+                  step="0.000001"
+                  placeholder="e.g. 5.5"
+                  value={settleUpAmount}
+                  onChange={(e) => setSettleUpAmount(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(false)} disabled={isSubmitting}>
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting}>
+                {isSubmitting ? "Processing..." : "Sign & Send"}
               </button>
             </div>
           </div>
