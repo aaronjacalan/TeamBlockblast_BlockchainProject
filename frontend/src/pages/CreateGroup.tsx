@@ -5,10 +5,10 @@ import { groupMembers } from "../data";
 interface CreateGroupProps {
   onClose: () => void;
   onCreated: () => void;
-  walletAddress: string;  // added
+  userId: string;
 }
 
-const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, walletAddress }) => {
+const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId }) => {
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [members, setMembers] = useState(groupMembers);
@@ -64,21 +64,24 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, walletAdd
     setGroupDescription(value.slice(0, 100));
   };
 
-  // this is the main change — now calls your backend
   const handleCreate = async () => {
     if (!groupName.trim()) return;
 
     setLoading(true);
     try {
-      const res = await fetch("http://localhost:8000/api/groups/", {
+        console.log("Creating group with:", {
+          name: groupName.trim(),
+          description: groupDescription,
+          created_by: userId,
+        });
+      const res = await fetch("/api/groups/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: groupName.trim(),
           description: groupDescription,
           image_url: "",
-          members: members.filter(m => !m.isOwner).map(m => m.email),
-          created_by: walletAddress,
+          created_by: userId,
         }),
       });
 

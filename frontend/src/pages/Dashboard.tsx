@@ -7,10 +7,11 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 interface DashboardProps {
   onNavigate: (page: Page) => void;
   onCreateGroup: () => void;
+  onSelectGroup: (groupId: string) => void;
   groups: any[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, groups }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups }) => {
   return (
     <main className="dashboard page-offset">
       <div className="container dashboard-inner">
@@ -95,7 +96,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, groups
                 <button
                   key={g.id}
                   className="db-group-card card card-p"
-                  onClick={() => onNavigate("group-details")}
+                  onClick={() => onSelectGroup(g.id)}
                 >
                   <div className="db-group-card-top">
                     <div className="db-group-icon">

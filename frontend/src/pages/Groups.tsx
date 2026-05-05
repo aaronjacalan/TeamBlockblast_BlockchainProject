@@ -6,6 +6,7 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 interface GroupsProps {
   onNavigate: (page: Page) => void;
   onCreateGroup: () => void;
+  onSelectGroup: (groupId: string) => void;
   groups: any[];
 }
 
@@ -18,7 +19,7 @@ const avatarUrls = [
   "https://lh3.googleusercontent.com/aida-public/AB6AXuB2DZLae-kHP31rAF9J4AqRE6IvjrXYG0bYmjIfZQBg9-VR75sYewEQO4JMASy6xYhDyUJ9ko9dE0SCM5V54x4S5Un71BKGWaubZwX6a4s7sZsMT9xOTx8NHkx-scTxwEVfT-Q_rKpPgSXgfkfExfHpRz76C5Nkl7E3B_u73icYrgLyahDmlxRmHB3QfAdsaIi51Xw7A5HRXhfGQSSBSrzIze84Bx-EKKRNXaXG_QBTiHtxv9aSCXfgw3ML0P9_Vk8z78tElEw7pg_6"
 ];
 
-const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, groups }) => {
+const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups }) => {
   const [query, setQuery] = useState("");
 
   const activeGroups = groups;
@@ -87,18 +88,18 @@ const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, groups }) =>
                 <button
                   key={g.id}
                   className="groups-card"
-                  onClick={() => onNavigate("group-details")}
+                  onClick={() => onSelectGroup(g.id)}
                 >
                   <div className="groups-card-top">
                     <div className="groups-card-icon">
-                      <span className="material-symbols-outlined" style={{ fontSize: 28 }}>{g.icon}</span>
+                      <span className="material-symbols-outlined" style={{ fontSize: 28 }}>{g.icon ?? "group"}</span>
                     </div>
                     <div className="groups-card-balance">
                       <span className="text-label-sm" style={{ color: "var(--color-on-surface-variant)" }}>
                         Current Balance
                       </span>
-                      <span className="text-headline-sm" style={{ color: g.balanceColor }}>
-                        {g.balance.replace("+", "")}
+                      <span className="text-headline-sm" style={{ color: g.balanceColor ?? "var(--color-on-surface)" }}>
+                        {(g.balance ?? "0").replace("+", "")}
                       </span>
                     </div>
                   </div>
@@ -142,7 +143,7 @@ const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, groups }) =>
               <div key={g.id} className="groups-settled-row">
                 <div className="groups-settled-left">
                   <div className="groups-settled-icon">
-                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>{g.icon}</span>
+                    <span className="material-symbols-outlined" style={{ fontSize: 22 }}>{g.icon ?? "group"}</span>
                   </div>
                   <div>
                     <h4 className="text-body-lg">{g.name}</h4>
