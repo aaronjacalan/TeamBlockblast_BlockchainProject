@@ -27,3 +27,5 @@ dist-ssr
 # stuff
 venv/
 */venv
+__pycache__/
+*/__pycache__/
