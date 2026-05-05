@@ -20,19 +20,35 @@ type Page =
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<Page>("landing");
+  const [userId, setUserId] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState("");
 
   const navigate = (page: Page) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const navigateToGroup = (groupId: string) => {
+    setSelectedGroupId(groupId);
+    navigate("group-details");
+  };
+
   const fetchGroups = async () => {
-    const res = await fetch("http://localhost:8000/api/groups/");
+    const res = await fetch("/api/groups/");
     const data = await res.json();
-    setGroups(data);
+    setGroups(
+      data.map((g: any) => ({
+        id: g.id,
+        name: g.name ?? "Unnamed Group",
+        description: g.description ?? "",
+        balance: g.balance ?? "0",
+        balanceColor: g.balanceColor ?? "var(--color-on-surface)",
+        icon: g.icon ?? "group",
+      }))
+    );
   };
 
   const handleLogin = () => {
@@ -84,21 +100,20 @@ const App: React.FC = () => {
 
       {currentPage === "login" && (
         <Login
-          onLogin={async (address) => {
-            // 1. save wallet to backend
-            await fetch("http://localhost:8000/api/auth/login", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ wallet_address: address }),
-            });
+          onLogin={async (user: any) => {
+          console.log("LOGIN USER:", user);
 
-            // 2. load groups
-            await fetchGroups();
+          if (!user.id) {
+            console.error("User ID missing from backend!");
+            return;
+          }
 
-            // 3. set wallet and navigate
-            setWalletAddress(address);
-            navigate("dashboard");
-          }}
+          setUserId(user.id);
+          setWalletAddress(user.stake_address);
+
+          await fetchGroups();
+          navigate("dashboard");
+        }}
         />
       )}
 
@@ -107,6 +122,7 @@ const App: React.FC = () => {
           groups={groups}
           onNavigate={navigate}
           onCreateGroup={() => setCreateGroupOpen(true)}
+          onSelectGroup={navigateToGroup}
         />
       )}
 
@@ -115,15 +131,16 @@ const App: React.FC = () => {
           groups={groups}
           onNavigate={navigate}
           onCreateGroup={() => setCreateGroupOpen(true)}
+          onSelectGroup={navigateToGroup}
         />
       )}
 
       {createGroupOpen && (
         <CreateGroup
-          walletAddress={walletAddress}
+          userId={userId}
           onClose={() => setCreateGroupOpen(false)}
           onCreated={async () => {
-            await fetchGroups(); // refresh groups after creating one
+            await fetchGroups();
             setCreateGroupOpen(false);
             navigate("groups");
           }}
@@ -131,7 +148,10 @@ const App: React.FC = () => {
       )}
 
       {currentPage === "group-details" && (
-        <GroupDetails />
+        <GroupDetails
+          groupId={selectedGroupId}
+          userId={userId}
+        />
       )}
 
       {currentPage === "settings" && (

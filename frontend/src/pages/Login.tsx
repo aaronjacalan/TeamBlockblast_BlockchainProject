@@ -1,20 +1,21 @@
 import React, { useState, useEffect, type ChangeEvent } from "react";
 import { MeshCardanoBrowserWallet } from "@meshsdk/wallet";
 import "./Login.css";
+import { resolveRewardAddress } from "@meshsdk/core";
 
 interface LoginProps {
-  onLogin: (walletAddress: string) => void;
+  onLogin: (user: object) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [availableWallets, setAvailableWallets] = useState<string[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<string>("Disconnected");
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const getAvailableWallets = async () => {
       const wallets = await MeshCardanoBrowserWallet.getInstalledWallets();
-      const walletNames = wallets.map((w) => w.name);
-      setAvailableWallets(walletNames);
+      setAvailableWallets(wallets.map((w) => w.name));
     };
     getAvailableWallets();
   }, []);
@@ -25,18 +26,45 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
   const connectWallet = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedWallet === "Disconnected") {
+      alert("Please select a wallet first!");
+      return;
+    }
+
+    setLoading(true);
     try {
-      if (selectedWallet === "Disconnected") {
-        alert("Please select a wallet first!");
-        return;
-      }
-      
       const wallet = await MeshCardanoBrowserWallet.enable(selectedWallet);
-      const address = await wallet.getChangeAddressBech32();
-      onLogin(address);
+      const rewardAddresses = await wallet.getRewardAddresses();
+      const stakeAddress = rewardAddresses[0];
+      if (!stakeAddress) throw new Error("No stake address found");
+
+      const nonceRes = await fetch("/api/auth/nonce", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stake_address: stakeAddress }),
+      });
+      if (!nonceRes.ok) throw new Error("Failed to get nonce");
+      const { nonce } = await nonceRes.json();
+
+      const signedMessage = await wallet.signData(stakeAddress, nonce);
+
+      const verifyRes = await fetch("/api/auth/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          stake_address: stakeAddress,
+          signed_message: JSON.stringify(signedMessage),
+        }),
+      });
+      if (!verifyRes.ok) throw new Error("Failed to verify signature");
+      const { user } = await verifyRes.json();
+
+      onLogin(user);
     } catch (error) {
       console.error("Error connecting to wallet:", error);
-      alert("Failed to connect wallet.");
+      alert("Failed to connect wallet. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,20 +99,19 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   style={{ cursor: "pointer", padding: "12px", borderRadius: "8px", border: "1px solid var(--color-outline)", backgroundColor: "var(--color-surface)", color: "var(--color-on-surface)" }}
                   value={selectedWallet}
                   onChange={handleSelectedWalletChange}
+                  disabled={loading}
                 >
                   <option value="Disconnected">-- Select a wallet --</option>
                   {availableWallets.map((w, i) => (
-                    <option key={i} value={w}>
-                      {w}
-                    </option>
+                    <option key={i} value={w}>{w}</option>
                   ))}
                 </select>
 
-                <button className="login-submit" type="submit">
+                <button className="login-submit" type="submit" disabled={loading}>
                   <span className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>
                     account_balance_wallet
                   </span>
-                  Connect Wallet
+                  {loading ? "Connecting..." : "Connect Wallet"}
                 </button>
 
                 <div className="login-divider">
