@@ -29,10 +29,11 @@ def request_nonce(data: NonceRequest):
     existing = supabase.table("users") \
         .select("id") \
         .eq("stake_address", stake_address) \
+        .maybe_single() \
         .execute()
 
     # CREATE USER if missing
-    if not existing.data:
+    if existing is None:
         supabase.table("users").insert({
             "stake_address": stake_address,
             "auth_nonce": nonce,

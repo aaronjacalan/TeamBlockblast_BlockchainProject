@@ -1,7 +1,7 @@
 import React, { useState, useEffect, type ChangeEvent } from "react";
 import { MeshCardanoBrowserWallet } from "@meshsdk/wallet";
+import { useWallet } from "@meshsdk/react";
 import "./Login.css";
-import { resolveRewardAddress } from "@meshsdk/core";
 
 interface LoginProps {
   onLogin: (user: object) => void;
@@ -11,6 +11,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [availableWallets, setAvailableWallets] = useState<string[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<string>("Disconnected");
   const [loading, setLoading] = useState(false);
+  const { setWallet } = useWallet();
 
   useEffect(() => {
     const getAvailableWallets = async () => {
@@ -34,6 +35,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     try {
       const wallet = await MeshCardanoBrowserWallet.enable(selectedWallet);
+      setWallet(wallet, selectedWallet);
       const rewardAddresses = await wallet.getRewardAddresses();
       const stakeAddress = rewardAddresses[0];
       if (!stakeAddress) throw new Error("No stake address found");

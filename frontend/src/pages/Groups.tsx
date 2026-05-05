@@ -19,7 +19,7 @@ const avatarUrls = [
   "https://lh3.googleusercontent.com/aida-public/AB6AXuB2DZLae-kHP31rAF9J4AqRE6IvjrXYG0bYmjIfZQBg9-VR75sYewEQO4JMASy6xYhDyUJ9ko9dE0SCM5V54x4S5Un71BKGWaubZwX6a4s7sZsMT9xOTx8NHkx-scTxwEVfT-Q_rKpPgSXgfkfExfHpRz76C5Nkl7E3B_u73icYrgLyahDmlxRmHB3QfAdsaIi51Xw7A5HRXhfGQSSBSrzIze84Bx-EKKRNXaXG_QBTiHtxv9aSCXfgw3ML0P9_Vk8z78tElEw7pg_6"
 ];
 
-const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups }) => {
+const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups }) => {
   const [query, setQuery] = useState("");
 
   const activeGroups = groups;
