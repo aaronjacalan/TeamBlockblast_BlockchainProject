@@ -5,13 +5,15 @@ import { groupMembers } from "../data";
 interface CreateGroupProps {
   onClose: () => void;
   onCreated: () => void;
+  walletAddress: string;  // added
 }
 
-const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
+const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, walletAddress }) => {
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [members, setMembers] = useState(groupMembers);
   const [hoveredMember, setHoveredMember] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);  // added
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -62,8 +64,32 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
     setGroupDescription(value.slice(0, 100));
   };
 
-  const handleCreate = () => {
-    onCreated();
+  // this is the main change — now calls your backend
+  const handleCreate = async () => {
+    if (!groupName.trim()) return;
+
+    setLoading(true);
+    try {
+      const res = await fetch("http://localhost:8000/api/groups/", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: groupName.trim(),
+          description: groupDescription,
+          image_url: "",
+          members: members.filter(m => !m.isOwner).map(m => m.email),
+          created_by: walletAddress,
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to create group");
+
+      onCreated();
+    } catch (err) {
+      alert("Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -108,8 +134,8 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
                   <div className="cg-desc-header">
                     <label className="cg-label">SHORT DESCRIPTION</label>
                     <span className="cg-desc-count">
-                    {Math.max(0, 100 - groupDescription.length)} characters left
-                  </span>
+                      {Math.max(0, 100 - groupDescription.length)} characters left
+                    </span>
                   </div>
                   <textarea
                     className="cg-desc-input"
@@ -121,8 +147,8 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
                 </div>
 
                 <div className="cg-cta">
-                  <button className="cg-create-btn" onClick={handleCreate}>
-                    Create Group
+                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading}>
+                    {loading ? "Creating..." : "Create Group"}
                   </button>
                 </div>
 
@@ -200,7 +226,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
         </div>
       </div>
 
-      {/* ── Add Member Modal ─────────────────── */}
+      {/* Add Member Modal */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
@@ -240,7 +266,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated }) => {
         </div>
       )}
 
-      {/* ── Delete Member Modal ───────────────── */}
+      {/* Delete Member Modal */}
       {showDeleteModal && (
         <div className="modal-backdrop" onClick={() => setShowDeleteModal(false)}>
           <div className="modal-box modal-box-sm" onClick={(e) => e.stopPropagation()}>

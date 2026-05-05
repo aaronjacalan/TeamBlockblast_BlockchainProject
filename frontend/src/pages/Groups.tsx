@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import "./Groups.css";
-import { groups } from "../data";
 
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface GroupsProps {
   onNavigate: (page: Page) => void;
   onCreateGroup: () => void;
+  groups: any[];
 }
 
 const avatarUrls = [
@@ -18,7 +18,7 @@ const avatarUrls = [
   "https://lh3.googleusercontent.com/aida-public/AB6AXuB2DZLae-kHP31rAF9J4AqRE6IvjrXYG0bYmjIfZQBg9-VR75sYewEQO4JMASy6xYhDyUJ9ko9dE0SCM5V54x4S5Un71BKGWaubZwX6a4s7sZsMT9xOTx8NHkx-scTxwEVfT-Q_rKpPgSXgfkfExfHpRz76C5Nkl7E3B_u73icYrgLyahDmlxRmHB3QfAdsaIi51Xw7A5HRXhfGQSSBSrzIze84Bx-EKKRNXaXG_QBTiHtxv9aSCXfgw3ML0P9_Vk8z78tElEw7pg_6"
 ];
 
-const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup }) => {
+const Groups: React.FC<GroupsProps> = ({ onNavigate, onCreateGroup, groups }) => {
   const [query, setQuery] = useState("");
 
   const activeGroups = groups;

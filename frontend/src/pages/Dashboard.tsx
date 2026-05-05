@@ -1,15 +1,16 @@
 import React from "react";
 import "./Dashboard.css";
-import { activityItems, groups, CURRENCY } from "../data";
+import { activityItems, CURRENCY } from "../data";
 
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface DashboardProps {
   onNavigate: (page: Page) => void;
   onCreateGroup: () => void;
+  groups: any[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, groups }) => {
   return (
     <main className="dashboard page-offset">
       <div className="container dashboard-inner">
@@ -98,9 +99,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup }) => {
                 >
                   <div className="db-group-card-top">
                     <div className="db-group-icon">
-                      <span className="material-symbols-outlined">{g.icon}</span>
+                      <span className="material-symbols-outlined">{g.image_url || "group"}</span>
                     </div>
-                    <span className={`badge badge-${g.badgeVariant}`}>{g.badge}</span>
+                    <span className="badge badge-purple">Active</span>
                   </div>
                   <h4 className="text-headline-sm" style={{ marginTop: 20 }}>
                     {g.name}
@@ -110,10 +111,10 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup }) => {
                   </p>
                   <div className="db-group-card-footer">
                     <span className="text-label-sm" style={{ color: "var(--color-zinc-500)" }}>
-                      Balance
+                      Members
                     </span>
-                    <span className="text-headline-sm" style={{ color: g.balanceColor }}>
-                      {g.balance}
+                    <span className="text-headline-sm">
+                      {g.members?.length || 0}
                     </span>
                   </div>
                 </button>
