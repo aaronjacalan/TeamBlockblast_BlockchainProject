@@ -1,100 +1,47 @@
 # Manual Testing Guide — Settle Up Transaction
 
-This guide walks through testing the Cardano testnet transaction flow ("Settle Up") end-to-end.
+## What to Test
+Test the "Settle Up" button to send testnet ADA from your wallet to another address on the Cardano testnet.
 
 ## Prerequisites
+- Wallet connected and logged in (you are on the Dashboard)
+- Testnet ADA (tADA) in your wallet
+- Both servers running (frontend on 5173, backend on 8000)
 
-1. **Cardano Wallet Extension** installed (Lace, Nami, or Eternl)
-2. **Node.js** v18+ and **Python** v3.10+
-3. **Blockfrost API Key** (already in `frontend/.env`)
-4. **Supabase Project** with `users` and `groups` tables
+## Step 1: Go to a Group
 
-## Step 1: Prepare Your Wallet for Testnet
+1. From the **Dashboard**, click on any group card (e.g., "Ski Trip 2024").
+2. This opens the **Group Details** page.
 
-1. Open your Cardano wallet extension.
-2. Switch network from **Mainnet** to **Preview** or **Preprod** (must match your Blockfrost API key).
-3. Copy your wallet's receive address.
+## Step 2: Click "Settle Up"
 
-## Step 2: Get Free Testnet ADA (tADA)
+1. In the top right corner, click the **Settle Up** button.
+2. A modal will appear.
 
-> **Important:** Real ADA cannot be used on testnet.
+## Step 3: Fill In the Modal
 
-1. Go to [Cardano Testnet Faucet](https://docs.cardano.org/cardano-testnet/tools/faucet/).
-2. Select the same network as your wallet (Preview/Preprod).
-3. Paste your wallet address and request funds.
-4. Wait 1–2 minutes for tADA to arrive.
+- **Recipient Address:** Paste a testnet address — your own address, a friend's, or this dummy:
+  `addr_test1qpe068rccw5k3vpsnukw5cweff7pxn94sct4edrn2w8e4ccaqcqqy23smyx50j0w7q3j9qgq8cxw7p0v0pqqpqqq9r7tww`
+- **Amount:** Enter a small amount like `2` or `5.5` (ADA).
 
-## Step 3: Configure Backend Environment
+## Step 4: Sign and Send
 
-Ensure `backend/.env` exists with:
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_KEY=your-anon-or-service-key
-```
+1. Click **Sign & Send**.
+2. Your wallet extension will pop up — review the transaction summary (ADA + network fee).
+3. Type your password to sign.
+4. The app will show an alert: **"Transaction successful!"** with a **Transaction Hash**.
 
-## Step 4: Start Both Servers
+## Step 5: Verify on Explorer
 
-**Terminal 1 — Frontend:**
-```bash
-cd frontend
-npm install
-npm run dev
-```
-Runs at `http://localhost:5173`.
-
-**Terminal 2 — Backend:**
-```bash
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-uvicorn main:app --reload
-```
-Runs at `http://localhost:8000`.
-
-> **Note:** If you get `ModuleNotFoundError: No module named 'supabase'`, make sure you activated the virtual environment (`source venv/bin/activate`) before running `pip install`.
-
-## Step 5: Log In to the App
-
-1. Open `http://localhost:5173`.
-2. Click **Get Started** → select your wallet → **Connect Wallet**.
-3. Approve the connection in your wallet extension.
-4. The app will save your wallet address to the backend and redirect to the **Dashboard**.
-
-> **Troubleshooting:** If you see a `CORS` error or the page doesn't redirect, check that:
-> - The backend server is actually running (`uvicorn` should show `Application startup complete`)
-> - Your Supabase `users` table has a `wallet_address` column (text type)
-> - Check the browser console for the exact error message
-
-## Step 6: Access Group Details
-
-1. From the Dashboard, click on a group card to open **Group Details**.
-2. The page will fetch real group data and expenses from the backend API.
-
-## Step 7: Test "Settle Up" Transaction
-
-1. In the top right corner of the group page, click **Settle Up**.
-2. Fill in the modal:
-   - **Recipient Address:** Enter a valid testnet address. If you don't have a second wallet, send it back to yourself (paste your own address) or use this dummy Preprod address:
-     `addr_test1qpe068rccw5k3vpsnukw5cweff7pxn94sct4edrn2w8e4ccaqcqqy23smyx50j0w7q3j9qgq8cxw7p0v0pqqpqqq9r7tww`
-   - **Amount:** Enter a small amount like `2` or `5.5` (ADA).
-3. Click **Sign & Send**.
-
-## Step 8: Sign and Verify!
-
-1. Your wallet extension will pop up showing a transaction summary (e.g., sending 5 ADA + network fee).
-2. Type your wallet password to sign the transaction.
-3. Once submitted, the app will show an alert box saying **"Transaction successful!"** along with a long **Transaction Hash**.
-4. Copy that hash and go to [Cardanoscan Testnet Explorer](https://preprod.cardanoscan.io/) (make sure you're on the Preprod/Preview explorer, not Mainnet).
-5. Paste the hash in the search bar. You will see your transaction confirming live on the blockchain!
+1. Copy the transaction hash.
+2. Go to [Cardanoscan Preview Explorer](https://preview.cardanoscan.io/).
+3. Paste the hash in the search bar.
+4. Confirm the transaction appears on the blockchain.
 
 ## Troubleshooting
 
 | Issue | Solution |
 |-------|----------|
-| `ModuleNotFoundError: No module named 'supabase'` | Activate venv: `source venv/bin/activate` then `pip install -r requirements.txt` |
-| `externally-managed-environment` | Use a virtual environment (`python3 -m venv venv`) instead of system pip |
-| `CORS policy` error in browser | Backend is down or crashed. Check terminal for 500 errors |
-| `column users.wallet_address does not exist` | Add `wallet_address` column (text type) to Supabase `users` table |
-| Wallet connects but no redirect | Check browser console for fetch errors. Backend must be running and accessible |
-| Build fails with `noUnusedLocals` | Remove unused imports (e.g., `CURRENCY` from `../data`) |
+| `signData` fails | Wallet may not support CIP. Try Lace wallet on Preview network |
+| Wallet connects but no redirect | Backend may be down — check uvicorn terminal on port 8000 |
+| Groups not loading | Check `backend/.env` has valid Supabase credentials |

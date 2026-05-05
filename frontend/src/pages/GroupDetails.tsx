@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useWallet } from "@meshsdk/react";
-import { Transaction, BlockfrostProvider } from "@meshsdk/core";
+import { BlockfrostProvider, MeshTxBuilder } from "@meshsdk/core";
 import "./GroupDetails.css";
 
 interface Member {
@@ -38,7 +38,7 @@ interface GroupDetailsProps {
 }
 
 const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
-  const { wallet, connected } = useWallet();
+  const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
@@ -176,8 +176,8 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
   const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
 
   const submitSettleUp = async () => {
-    if (!connected) {
-      alert("Please connect your wallet first.");
+    if (!wallet) {
+      alert("Wallet not available. Please refresh and try again.");
       return;
     }
     if (!settleUpAddress || !settleUpAmount) {
@@ -187,25 +187,33 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
 
     try {
       setIsSubmitting(true);
-      
+
       const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
       if (!blockfrostApiKey) {
         alert("Blockfrost API Key is missing in environment variables.");
         return;
       }
-      
+
       const blockfrostProvider = new BlockfrostProvider(blockfrostApiKey);
-      // Disable strict type checking for initiator due to Mesh SDK v1 / v2 version mismatch
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const tx = new Transaction({ initiator: wallet as any });
-      
       const amountInLovelace = Math.floor(parseFloat(settleUpAmount) * 1000000).toString();
-      tx.sendLovelace(settleUpAddress, amountInLovelace);
-      
-      const unsignedTx = await tx.build();
-      const signedTx = await wallet.signTx(unsignedTx, true);
-      const txHash = await blockfrostProvider.submitTx(signedTx);
-      
+
+      const txBuilder = new MeshTxBuilder({
+        fetcher: blockfrostProvider,
+        verbose: true,
+      });
+
+      const utxos = await wallet.getUtxosMesh();
+      const changeAddress = await wallet.getChangeAddressBech32();
+
+      const unsignedTx = await txBuilder
+        .txOut(settleUpAddress, [{ unit: "lovelace", quantity: amountInLovelace }])
+        .changeAddress(changeAddress)
+        .selectUtxosFrom(utxos)
+        .complete();
+
+      const signedTx = await wallet.signTxReturnFullTx(unsignedTx, false);
+      const txHash = await wallet.submitTx(signedTx);
+
       alert(`Transaction successful!\nHash: ${txHash}`);
       setShowSettleUpModal(false);
       setSettleUpAddress("");
