@@ -26,13 +26,14 @@ def request_nonce(data: NonceRequest):
     nonce = secrets.token_hex(32)
     expires_at = datetime.now(timezone.utc) + timedelta(minutes=5)
 
-    user_res = supabase.table("users") \
+    existing = supabase.table("users") \
         .select("id") \
         .eq("stake_address", stake_address) \
         .maybe_single() \
         .execute()
 
-    if user_res is None:
+    # CREATE USER if missing
+    if existing is None:
         supabase.table("users").insert({
             "stake_address": stake_address,
             "auth_nonce": nonce,
