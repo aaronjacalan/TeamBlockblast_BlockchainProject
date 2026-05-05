@@ -29,11 +29,11 @@ def request_nonce(data: NonceRequest):
     user_res = supabase.table("users") \
         .select("id") \
         .eq("stake_address", stake_address) \
-        .single() \
+        .maybe_single() \
         .execute()
 
-    if not user_res.data:
-        user_res = supabase.table("users").insert({
+    if user_res is None:
+        supabase.table("users").insert({
             "stake_address": stake_address,
             "auth_nonce": nonce,
             "nonce_expires_at": expires_at.isoformat()
