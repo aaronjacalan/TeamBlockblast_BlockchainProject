@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, type ChangeEvent } from "react";
+import { MeshCardanoBrowserWallet } from "@meshsdk/wallet";
 import "./Login.css";
 
 interface LoginProps {
@@ -6,13 +7,37 @@ interface LoginProps {
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [walletInput, setWalletInput] = useState("");
+  const [availableWallets, setAvailableWallets] = useState<string[]>([]);
+  const [selectedWallet, setSelectedWallet] = useState<string>("Disconnected");
 
-  const handleSubmit = (event: React.FormEvent) => {
-    event.preventDefault();
-    const trimmed = walletInput.trim();
-    if (!trimmed) return;
-    onLogin(trimmed);
+  useEffect(() => {
+    const getAvailableWallets = async () => {
+      const wallets = await MeshCardanoBrowserWallet.getInstalledWallets();
+      const walletNames = wallets.map((w) => w.name);
+      setAvailableWallets(walletNames);
+    };
+    getAvailableWallets();
+  }, []);
+
+  const handleSelectedWalletChange = (e: ChangeEvent<HTMLSelectElement>) => {
+    setSelectedWallet(e.target.value);
+  };
+
+  const connectWallet = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (selectedWallet === "Disconnected") {
+        alert("Please select a wallet first!");
+        return;
+      }
+      
+      const wallet = await MeshCardanoBrowserWallet.enable(selectedWallet);
+      const address = await wallet.getChangeAddressBech32();
+      onLogin(address);
+    } catch (error) {
+      console.error("Error connecting to wallet:", error);
+      alert("Failed to connect wallet.");
+    }
   };
 
   return (
@@ -28,7 +53,6 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               The next generation of financial clarity. Seamlessly manage shared expenses on the
               Cardano blockchain with precision, privacy, and zero fees.
             </p>
-
           </section>
 
           <section className="login-right">
@@ -36,24 +60,31 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="login-card-header">
                 <h2 className="text-headline-sm">Sign In</h2>
                 <p className="text-body-md" style={{ color: "var(--color-on-surface-variant)" }}>
-                  Enter your Cardano wallet address to start splitting bills securely.
+                  Select your Cardano wallet to start splitting bills securely.
                 </p>
               </div>
 
-              <form className="login-form" onSubmit={handleSubmit}>
-                <label className="login-label">Cardano Wallet Address</label>
-                <input
+              <form className="login-form" onSubmit={connectWallet}>
+                <label className="login-label">Select Wallet</label>
+                <select
                   className="login-input"
-                  type="text"
-                  placeholder="addr1..."
-                  value={walletInput}
-                  onChange={(e) => setWalletInput(e.target.value)}
-                />
+                  style={{ cursor: "pointer", padding: "12px", borderRadius: "8px", border: "1px solid var(--color-outline)", backgroundColor: "var(--color-surface)", color: "var(--color-on-surface)" }}
+                  value={selectedWallet}
+                  onChange={handleSelectedWalletChange}
+                >
+                  <option value="Disconnected">-- Select a wallet --</option>
+                  {availableWallets.map((w, i) => (
+                    <option key={i} value={w}>
+                      {w}
+                    </option>
+                  ))}
+                </select>
+
                 <button className="login-submit" type="submit">
                   <span className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>
                     account_balance_wallet
                   </span>
-                  Continue with Wallet
+                  Connect Wallet
                 </button>
 
                 <div className="login-divider">
