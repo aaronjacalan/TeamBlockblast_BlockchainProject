@@ -21,10 +21,11 @@ class GroupInviteCreate(BaseModel):
 
 
 @router.get("/")
-def get_all_groups():
+def get_all_groups(user_id: str):
     result = (
         supabase.table("groups")
-        .select("*, group_members(user_id)")
+        .select("*, group_members!inner(user_id)")
+        .eq("group_members.user_id", user_id)
         .order("created_at", desc=True)
         .execute()
     )

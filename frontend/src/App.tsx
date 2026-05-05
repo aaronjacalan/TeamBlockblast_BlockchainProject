@@ -23,7 +23,7 @@ const App: React.FC = () => {
   const [userId, setUserId] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
-  const [groups, setGroups] = useState([]);
+  const [groups, setGroups] = useState<any[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
 
   const navigate = (page: Page) => {
@@ -36,19 +36,18 @@ const App: React.FC = () => {
     navigate("group-details");
   };
 
-  const fetchGroups = async () => {
-    const res = await fetch("/api/groups/");
-    const data = await res.json();
-    setGroups(
-      data.map((g: any) => ({
-        id: g.id,
-        name: g.name ?? "Unnamed Group",
-        description: g.description ?? "",
-        balance: g.balance ?? "0",
-        balanceColor: g.balanceColor ?? "var(--color-on-surface)",
-        icon: g.icon ?? "group",
-      }))
-    );
+  const fetchGroups = async (uid?: string) => {
+    const id = uid ?? userId;
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/groups/?user_id=${id}`);
+      if (!res.ok) throw new Error("Failed to fetch groups");
+      const data = await res.json();
+      setGroups(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error("Failed to fetch groups:", error);
+      setGroups([]);
+    }
   };
 
   const handleLogin = () => {
@@ -101,19 +100,11 @@ const App: React.FC = () => {
       {currentPage === "login" && (
         <Login
           onLogin={async (user: any) => {
-          console.log("LOGIN USER:", user);
-
-          if (!user.id) {
-            console.error("User ID missing from backend!");
-            return;
-          }
-
-          setUserId(user.id);
-          setWalletAddress(user.stake_address);
-
-          await fetchGroups();
-          navigate("dashboard");
-        }}
+            setUserId(user.id);
+            setWalletAddress(user.stake_address);
+            await fetchGroups(user.id);  // pass user.id directly
+            navigate("dashboard");
+          }}
         />
       )}
 
