@@ -56,7 +56,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [expenseName, setExpenseName] = useState("");
   const [expenseAmount, setExpenseAmount] = useState("");
   const [expensePaidBy, setExpensePaidBy] = useState(userId);
-  const [splitType, setSplitType] = useState("equal");
   const [expenseLoading, setExpenseLoading] = useState(false);
 
   // Add Member Modal
@@ -111,7 +110,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
           name: expenseName.trim(),
           amount: parseFloat(expenseAmount),
           currency: "ADA",
-          split_type: splitType,
+          split_type: "equal",
         }),
       });
       if (!res.ok) throw new Error("Failed to add expense");
@@ -120,7 +119,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       setExpenseName("");
       setExpenseAmount("");
       setExpensePaidBy(userId);
-      setSplitType("equal");
       setShowExpenseModal(false);
     } catch (err) {
       alert("Failed to add expense. Please try again.");
@@ -285,7 +283,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 </span>
               </div>
               <div className="gd-stat-card gd-stat-error">
-                <span className="text-label-sm gd-stat-label gd-stat-label-error">Your Balance</span>
+                <span className="text-label-sm gd-stat-label gd-stat-label-error">Wallet Balance</span>
                 <span className="text-data-display gd-stat-value-error">
                   {yourBalance >= 0 ? "+" : ""}ADA {yourBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
@@ -457,16 +455,12 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 </select>
               </div>
               <div className="modal-field">
-                <label className="modal-label">Split Type</label>
-                <select
+                <label className="modal-label">Short Description</label>
+                <textarea
                   className="modal-input"
-                  value={splitType}
-                  onChange={(e) => setSplitType(e.target.value)}
-                >
-                  <option value="equal">Equal</option>
-                  <option value="exact">Exact</option>
-                  <option value="percentage">Percentage</option>
-                </select>
+                  placeholder="Add a quick note for this expense..."
+                  rows={3}
+                />
               </div>
             </div>
             <div className="modal-footer">
