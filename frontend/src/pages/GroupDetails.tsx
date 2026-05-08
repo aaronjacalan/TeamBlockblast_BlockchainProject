@@ -35,9 +35,10 @@ interface Group {
 interface GroupDetailsProps {
   groupId: string;
   userId: string;
+  onExpenseAdded: () => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded }) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -115,6 +116,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
       });
       if (!res.ok) throw new Error("Failed to add expense");
       await fetchExpenses();
+      onExpenseAdded(); 
       setExpenseName("");
       setExpenseAmount("");
       setExpensePaidBy(userId);
@@ -353,9 +355,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
                   </div>
 
                   <div className="gd-member-list">
-                    {group.group_members?.map((m) => (
-                      <div
-                        key={m.id}
+                    {group.group_members?.map((m, i) => (
+                    <div
+                      key={m.user_id ?? i}
                         className={`gd-member-row ${m.user_id === userId ? "gd-member-you" : ""}`}
                         style={{ position: "relative" }}
                         onMouseEnter={(e) => {

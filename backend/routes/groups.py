@@ -20,6 +20,35 @@ class GroupInviteCreate(BaseModel):
     created_by: str  # user uuid
 
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
+
+def log_activity(user_id: str, group_id: str, type: str, description: str):
+    try:
+        supabase.table("activities").insert({
+            "user_id": user_id,
+            "group_id": group_id,
+            "type": type,
+            "description": description,
+        }).execute()
+    except:
+        pass  # don't crash the main request if logging fails
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
+
+@router.get("/activities")
+def get_activities(user_id: str):
+    result = (
+        supabase.table("activities")
+        .select("*")
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(10)
+        .execute()
+    )
+    return result.data
+
+
 @router.get("/")
 def get_all_groups(user_id: str):
     result = (
@@ -70,11 +99,14 @@ def create_group(data: GroupCreate):
     group = group_result.data[0]
     group_id = group["id"]
 
-    # add creator to group_members
+    # add creator as first member
     supabase.table("group_members").insert({
         "group_id": group_id,
         "user_id": data.created_by,
     }).execute()
+
+    # log activity
+    log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
 
     return group
 
@@ -103,7 +135,7 @@ def join_group(group_id: str, invite_code: str, user_id: str):
             supabase.table("group_invites").update({"status": "expired"}).eq("id", invite["id"]).execute()
             raise HTTPException(status_code=400, detail="Invite has expired")
 
-    # check if user is already a member
+    # check if already a member
     existing = (
         supabase.table("group_members")
         .select("id")
@@ -120,13 +152,16 @@ def join_group(group_id: str, invite_code: str, user_id: str):
         "user_id": user_id,
     }).execute()
 
+    # log activity
+    log_activity(user_id, group_id, "member_joined", f"Joined the group")
+
     return {"message": "Joined group successfully"}
 
 
 @router.post("/invites")
 def create_invite(data: GroupInviteCreate):
     # verify group exists
-    group_result = supabase.table("groups").select("id").eq("id", data.group_id).execute()
+    group_result = supabase.table("groups").select("id, name").eq("id", data.group_id).execute()
     if not group_result.data:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -157,8 +192,8 @@ def create_invite(data: GroupInviteCreate):
 
 @router.delete("/{group_id}/members/{user_id}")
 def remove_member(group_id: str, user_id: str, requester_id: str):
-    # verify requester is the group creator
-    group_result = supabase.table("groups").select("created_by").eq("id", group_id).execute()
+    # verify group exists and get creator
+    group_result = supabase.table("groups").select("created_by, name").eq("id", group_id).execute()
     if not group_result.data:
         raise HTTPException(status_code=404, detail="Group not found")
 
@@ -167,4 +202,19 @@ def remove_member(group_id: str, user_id: str, requester_id: str):
 
     supabase.table("group_members").delete().eq("group_id", group_id).eq("user_id", user_id).execute()
 
+    # log activity
+    log_activity(requester_id, group_id, "member_removed", f"Removed a member from the group")
+
     return {"message": "Member removed successfully"}
+
+
+@router.get("/activities")
+def get_activities(wallet: str):
+    result = (
+        supabase.table("activities")
+        .select("*")
+        .order("created_at", desc=True)
+        .limit(10)
+        .execute()
+    )
+    return result.data

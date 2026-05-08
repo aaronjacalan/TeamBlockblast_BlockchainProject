@@ -25,6 +25,17 @@ const App: React.FC = () => {
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [groups, setGroups] = useState<any[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
+  const [activities, setActivities] = useState<any[]>([]);
+
+  const fetchActivities = async (id: string) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/groups/activities?user_id=${id}`);
+      const data = await res.json();
+      setActivities(data);
+    } catch (err) {
+      console.error("Failed to fetch activities");
+    }
+  };
 
   const navigate = (page: Page) => {
     setCurrentPage(page);
@@ -103,6 +114,7 @@ const App: React.FC = () => {
             setUserId(user.id);
             setWalletAddress(user.stake_address);
             await fetchGroups(user.id);  // pass user.id directly
+            await fetchActivities(user.id);
             navigate("dashboard");
           }}
         />
@@ -111,6 +123,7 @@ const App: React.FC = () => {
       {currentPage === "dashboard" && (
         <Dashboard
           groups={groups}
+          activities={activities}
           onNavigate={navigate}
           onCreateGroup={() => setCreateGroupOpen(true)}
           onSelectGroup={navigateToGroup}
@@ -142,6 +155,7 @@ const App: React.FC = () => {
         <GroupDetails
           groupId={selectedGroupId}
           userId={userId}
+          onExpenseAdded={() => fetchActivities(userId)}
         />
       )}
 

@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from database import supabase
+from routes.groups import log_activity
 
 router = APIRouter()
 
@@ -77,6 +78,7 @@ def create_expense(data: ExpenseCreate):
         ]
         supabase.table("expense_splits").insert(splits).execute()
 
+    log_activity(data.paid_by, data.group_id, "expense_added", f"Added expense \"{data.name}\" — {data.currency} {data.amount}")
     return expense
 
 

@@ -1,6 +1,6 @@
 import React from "react";
 import "./Dashboard.css";
-import { activityItems, CURRENCY } from "../data";
+import { CURRENCY } from "../data";
 
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
@@ -9,9 +9,10 @@ interface DashboardProps {
   onCreateGroup: () => void;
   onSelectGroup: (groupId: string) => void;
   groups: any[];
+  activities: any[];
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities }) => {
   return (
     <main className="dashboard page-offset">
       <div className="container dashboard-inner">
@@ -130,17 +131,20 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
               Recent Activity
             </h3>
             <div className="card db-activity-list">
-              {activityItems.map((item, i) => (
-                <div key={i} className="db-activity-item">
-                  <div className={`db-activity-icon db-activity-icon-${item.color}`}>
+              {(activities ?? []).map((item) => (
+                <div key={item.id} className="db-activity-item">
+                  <div className="db-activity-icon db-activity-icon-purple">
                     <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-                      {item.icon}
+                      {item.type === "group_created" ? "group_add"
+                        : item.type === "expense_added" ? "receipt_long"
+                        : item.type === "member_joined" ? "person_add"
+                        : "check_circle"}
                     </span>
                   </div>
                   <div>
-                    <p style={{ fontSize: 14, color: "#000", lineHeight: 1.5 }}>{item.text}</p>
+                    <p style={{ fontSize: 14, color: "#000", lineHeight: 1.5 }}>{item.description}</p>
                     <p style={{ fontSize: 12, color: "var(--color-zinc-400)", marginTop: 4 }}>
-                      {item.time}
+                      {new Date(item.created_at).toLocaleString()}
                     </p>
                   </div>
                 </div>
