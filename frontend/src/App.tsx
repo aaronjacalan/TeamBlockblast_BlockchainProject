@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Landing from "./pages/Landing";
@@ -27,6 +27,8 @@ const App: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [activities, setActivities] = useState<any[]>([]);
 
+  const isLoggedIn = Boolean(walletAddress);
+
   const fetchActivities = async (id: string) => {
     try {
       const res = await fetch(`http://localhost:8000/api/groups/activities?user_id=${id}`);
@@ -38,7 +40,8 @@ const App: React.FC = () => {
   };
 
   const navigate = (page: Page) => {
-    setCurrentPage(page);
+    const nextPage = isLoggedIn && page === "landing" ? "dashboard" : page;
+    setCurrentPage(nextPage);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -70,6 +73,12 @@ const App: React.FC = () => {
     setGroups([]);
     navigate("landing");
   };
+
+  useEffect(() => {
+    if (isLoggedIn && currentPage === "landing") {
+      navigate("dashboard");
+    }
+  }, [isLoggedIn, currentPage]);
 
   return (
     <>

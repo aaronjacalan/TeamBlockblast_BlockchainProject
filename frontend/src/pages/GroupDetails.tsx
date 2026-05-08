@@ -51,6 +51,12 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [settleUpAmount, setSettleUpAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Edit Group Modal
+  const [showEditGroupModal, setShowEditGroupModal] = useState(false);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupDescription, setEditGroupDescription] = useState("");
+  const [editGroupLoading, setEditGroupLoading] = useState(false);
+
   // Add Expense Modal
   const [showExpenseModal, setShowExpenseModal] = useState(false);
   const [expenseName, setExpenseName] = useState("");
@@ -71,6 +77,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     fetchGroup();
     fetchExpenses();
   }, [groupId]);
+
+  useEffect(() => {
+    if (group) {
+      setEditGroupName(group.name || "");
+      setEditGroupDescription(group.description || "");
+    }
+  }, [group]);
 
   const fetchGroup = async () => {
     try {
@@ -170,6 +183,34 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     }
   };
 
+  const handleEditGroup = async () => {
+    if (!editGroupName.trim()) {
+      alert("Group name is required");
+      return;
+    }
+
+    setEditGroupLoading(true);
+    try {
+      const res = await fetch(`/api/groups/${groupId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: editGroupName.trim(),
+          description: editGroupDescription.trim(),
+          requester_id: userId,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed to update group");
+      const data = await res.json();
+      setGroup(data);
+      setShowEditGroupModal(false);
+    } catch (err) {
+      alert("Failed to update group.");
+    } finally {
+      setEditGroupLoading(false);
+    }
+  };
+
   if (loading) return <main className="group-details page-offset"><div className="container">Loading...</div></main>;
   if (!group) return <main className="group-details page-offset"><div className="container">Group not found.</div></main>;
 
@@ -257,6 +298,10 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               </div>
 
               <div className="gd-header-actions">
+                <button className="btn btn-secondary" onClick={() => setShowEditGroupModal(true)}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                  Edit Group
+                </button>
                 <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
                   Settle Up
@@ -277,13 +322,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 </span>
               </div>
               <div className="gd-stat-card gd-stat-purple">
-                <span className="text-label-sm gd-stat-label gd-stat-label-purple">You Paid</span>
+                <span className="text-label-sm gd-stat-label gd-stat-label-purple">You Owe</span>
                 <span className="text-data-display gd-stat-value-purple">
                   ADA {youPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="gd-stat-card gd-stat-error">
-                <span className="text-label-sm gd-stat-label gd-stat-label-error">Wallet Balance</span>
+                <span className="text-label-sm gd-stat-label gd-stat-label-error">You Are Owed</span>
                 <span className="text-data-display gd-stat-value-error">
                   {yourBalance >= 0 ? "+" : ""}ADA {yourBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
@@ -350,6 +395,12 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
               {/* Side Panel */}
               <aside className="gd-sidebar">
+                <div className="card gd-desc-card">
+                  <h2 className="text-headline-sm">Group Description</h2>
+                  <p className="text-body-md" style={{ color: "var(--color-zinc-500)", marginTop: 8 }}>
+                    {group.description || "No description yet."}
+                  </p>
+                </div>
                 <div className="card gd-members-card">
                   <div className="gd-members-header">
                     <h2 className="text-headline-sm">Members</h2>
@@ -594,6 +645,50 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               </button>
               <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting}>
                 {isSubmitting ? "Processing..." : "Sign & Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Group Modal */}
+      {showEditGroupModal && (
+        <div className="modal-backdrop" onClick={() => setShowEditGroupModal(false)}>
+          <div className="modal-box" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2 className="text-headline-sm">Edit Group</h2>
+              <button className="modal-close-btn" onClick={() => setShowEditGroupModal(false)}>
+                <span className="material-symbols-outlined">close</span>
+              </button>
+            </div>
+            <div className="modal-body">
+              <div className="modal-field">
+                <label className="modal-label">Group Name</label>
+                <input
+                  className="modal-input"
+                  type="text"
+                  placeholder="Group name"
+                  value={editGroupName}
+                  onChange={(e) => setEditGroupName(e.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label className="modal-label">Description</label>
+                <textarea
+                  className="modal-input"
+                  placeholder="Add a short description..."
+                  rows={3}
+                  value={editGroupDescription}
+                  onChange={(e) => setEditGroupDescription(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowEditGroupModal(false)} disabled={editGroupLoading}>
+                Cancel
+              </button>
+              <button className="btn btn-dark" onClick={handleEditGroup} disabled={editGroupLoading}>
+                {editGroupLoading ? "Saving..." : "Save Changes"}
               </button>
             </div>
           </div>

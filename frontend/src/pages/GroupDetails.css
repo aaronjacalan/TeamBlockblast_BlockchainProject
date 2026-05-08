@@ -206,9 +206,16 @@
 .gd-sidebar {
   position: sticky;
   top: calc(var(--header-height) + 24px);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .gd-members-card {
+  padding: 18px;
+}
+
+.gd-desc-card {
   padding: 18px;
 }
 

@@ -40,14 +40,14 @@ const Header: React.FC<HeaderProps> = ({
       <div className="container header-inner">
         <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
           <button
-        className="header-logo"
-        onClick={() => onNavigate("landing")}
-        style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
+            className="header-logo"
+            onClick={() => onNavigate("dashboard")}
+            style={{ background: "none", border: "none", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px" }}
           >
-        <img src="/logo.svg" alt="FairShare" width={32} height={32} />
-        <span style={{ fontSize: "18px", fontWeight: "700", color: "#732ee4" }}>
-        Fair<span style={{ color: "#000000" }}>Share</span>
-        </span>
+            <img src="/logo.svg" alt="FairShare" width={32} height={32} />
+            <span style={{ fontSize: "18px", fontWeight: "700", color: "#732ee4" }}>
+              Fair<span style={{ color: "#000000" }}>Share</span>
+            </span>
           </button>
 
           <nav className="header-nav">

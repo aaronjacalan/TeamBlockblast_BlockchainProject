@@ -15,6 +15,12 @@ class GroupCreate(BaseModel):
     created_by: str  # user uuid
 
 
+class GroupUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    requester_id: str
+
+
 class GroupInviteCreate(BaseModel):
     group_id: str
     created_by: str  # user uuid
@@ -109,6 +115,38 @@ def create_group(data: GroupCreate):
     log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
 
     return group
+
+
+@router.put("/{group_id}")
+def update_group(group_id: str, data: GroupUpdate):
+    if not data.requester_id.strip():
+        raise HTTPException(status_code=400, detail="requester_id is required")
+
+    group_result = supabase.table("groups").select("created_by, name").eq("id", group_id).execute()
+    if not group_result.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    if group_result.data[0]["created_by"] != data.requester_id:
+        raise HTTPException(status_code=403, detail="Not authorized to update this group")
+
+    update_data = {}
+    if data.name is not None:
+        if not data.name.strip():
+            raise HTTPException(status_code=400, detail="Group name is required")
+        update_data["name"] = data.name.strip()
+    if data.description is not None:
+        update_data["description"] = data.description
+
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No updates provided")
+
+    update_result = supabase.table("groups").update(update_data).eq("id", group_id).execute()
+    updated_group = update_result.data[0] if update_result.data else None
+
+    if updated_group:
+        log_activity(data.requester_id, group_id, "group_updated", f"Updated group \"{updated_group.get('name', '')}\"")
+
+    return updated_group
 
 
 @router.post("/{group_id}/join")

@@ -27,18 +27,26 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
 
               <div className="db-balance-numbers">
                 <div>
+                  <span className="text-label-sm db-wallet-label">Wallet Balance</span>
+                  <div className="db-balance-amount">
+                    <span className="db-wallet-currency">{CURRENCY}</span>
+                    <span className="db-wallet-num">5,000.00</span>
+                  </div>
+                </div>
+                <div className="db-balance-divider" />
+                <div>
                   <span className="text-label-sm db-balance-label">You are owed</span>
-                  <div className="db-balance-amount db-balance-amount-purple">
+                  <div className="db-balance-amount">
+                    <span className="db-currency">{CURRENCY}</span>
                     <span className="db-big-num">4,250.00</span>
-                    <span className="db-currency db-currency-purple">{CURRENCY}</span>
                   </div>
                 </div>
                 <div className="db-balance-divider" />
                 <div>
                   <span className="text-label-sm db-balance-label">You owe</span>
                   <div className="db-balance-amount">
-                    <span className="db-big-num db-big-num-dark">1,120.45</span>
                     <span className="db-currency">{CURRENCY}</span>
+                    <span className="db-big-num db-big-num-dark">1,120.45</span>
                   </div>
                 </div>
               </div>
