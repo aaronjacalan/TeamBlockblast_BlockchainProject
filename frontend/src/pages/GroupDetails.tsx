@@ -173,6 +173,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
   if (loading) return <main className="group-details page-offset"><div className="container">Loading...</div></main>;
   if (!group) return <main className="group-details page-offset"><div className="container">Group not found.</div></main>;
 
+  // calculate stats from real expenses
+  const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
+  const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
+  const memberCount = group.group_members?.length || 1;
+  const yourShare = expenses.reduce((sum, e) => sum + (e.amount / memberCount), 0);
+  const yourBalance = youPaid - yourShare;
+
   const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
 
   const submitSettleUp = async () => {
@@ -258,6 +265,28 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId }) => {
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
                   Add Expense
                 </button>
+              </div>
+            </div>
+            
+            {/* Summary Stats */}
+            <div className="gd-stats">
+              <div className="gd-stat-card gd-stat-default">
+                <span className="text-label-sm gd-stat-label gd-stat-label-default">Total Group Spend</span>
+                <span className="text-data-display gd-stat-value-default">
+                  ADA {totalSpend.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="gd-stat-card gd-stat-purple">
+                <span className="text-label-sm gd-stat-label gd-stat-label-purple">You Paid</span>
+                <span className="text-data-display gd-stat-value-purple">
+                  ADA {youPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <div className="gd-stat-card gd-stat-error">
+                <span className="text-label-sm gd-stat-label gd-stat-label-error">Your Balance</span>
+                <span className="text-data-display gd-stat-value-error">
+                  {yourBalance >= 0 ? "+" : ""}ADA {yourBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
               </div>
             </div>
 
