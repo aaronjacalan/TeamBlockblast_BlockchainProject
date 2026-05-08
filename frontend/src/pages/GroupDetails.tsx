@@ -332,6 +332,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                           </p>
                         </div>
                         <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
+                          <button className="gd-expense-action-btn gd-action-edit">
+                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                          </button>
                           <button
                             className="gd-expense-action-btn gd-action-delete"
                             onClick={() => handleDeleteExpense(exp.id)}
