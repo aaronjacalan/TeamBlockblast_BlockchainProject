@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
@@ -9,10 +9,11 @@ interface SettingsProps {
 }
 
 const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }) => {
-  const [email, setEmail] = useState("aditya@email.com");
+  const [email, setEmail] = useState("");
   const [saved, setSaved] = useState(false);
   const [groupActivity, setGroupActivity] = useState(true);
   const [settlements, setSettlements] = useState(true);
+  const [displayName, setDisplayName] = useState("");
 
   const handleSave = async () => {
     if (!email.trim()) return;
@@ -20,7 +21,7 @@ const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }
       const res = await fetch("http://localhost:8000/api/auth/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId, email: email.trim() }),
+        body: JSON.stringify({ user_id: userId, email: email.trim(), display_name: displayName.trim() }),
       });
       if (!res.ok) throw new Error("Failed to save");
       setSaved(true);
@@ -29,6 +30,16 @@ const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }
       alert("Failed to save email. Please try again.");
     }
   };
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      const res = await fetch(`http://localhost:8000/api/auth/profile?user_id=${userId}`);
+      const data = await res.json();
+      if (data.email) setEmail(data.email);
+      if (data.display_name) setDisplayName(data.display_name);
+    };
+    fetchProfile();
+  }, [userId]);
 
   const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
@@ -130,6 +141,43 @@ const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }
               </div>
 
               <div>
+                <label style={{
+                  display: "block",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  color: "var(--color-on-surface)",
+                  marginBottom: 8,
+                }}>
+                  Display Name
+                </label>
+                <input
+                  style={{
+                    width: "100%",
+                    borderTop: "none",
+                    borderLeft: "none",
+                    borderRight: "none",
+                    borderBottom: "2px solid var(--color-zinc-200)",
+                    outline: "none",
+                    padding: "8px 0",
+                    fontSize: 16,
+                    fontFamily: "var(--font-family)",
+                    background: "transparent",
+                    color: "var(--color-on-surface)",
+                    transition: "border-color 0.15s",
+                    boxSizing: "border-box",
+                  }}
+                  type="text"
+                  placeholder="e.g. Juan Dela Cruz"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  onFocus={(e) => (e.currentTarget.style.borderBottomColor = "var(--color-tertiary)")}
+                  onBlur={(e) => (e.currentTarget.style.borderBottomColor = "var(--color-zinc-200)")}
+                />
+              </div>
+
+              <div>
                 <label
                   style={{
                     display: "block",
@@ -184,7 +232,7 @@ const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }
                 </button>
                 {saved && (
                       <p style={{ fontSize: 13, color: "var(--color-tertiary)", fontWeight: 600 }}>
-                      Notification email saved.
+                      Changes saved.
                       </p>
                 )}
               </div>

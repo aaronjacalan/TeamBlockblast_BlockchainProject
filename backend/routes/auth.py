@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from database import supabase
+from typing import Optional
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ class VerifyRequest(BaseModel):
 class UpdateProfile(BaseModel):
     user_id: str
     email: str
+    display_name: Optional[str] = ""
 
 
 @router.post("/auth/nonce")
@@ -97,7 +99,8 @@ def update_profile(data: UpdateProfile):
         raise HTTPException(status_code=400, detail="Email is required")
 
     result = supabase.table("users").update({
-        "email": data.email.strip()
+        "email": data.email.strip(),
+        "display_name": data.display_name.strip() if data.display_name else "",
     }).eq("id", data.user_id).execute()
 
     if not result.data:
@@ -112,3 +115,10 @@ def get_profile(user_id: str):
     if not result.data:
         raise HTTPException(status_code=404, detail="User not found")
     return result.data
+
+@router.get("/profile/by-email")
+def get_profile_by_email(email: str):
+    result = supabase.table("users").select("id, display_name, email").eq("email", email.strip()).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    return result.data[0]

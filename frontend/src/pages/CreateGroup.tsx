@@ -24,21 +24,42 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
 
-  const handleAddMember = () => {
-    if (!newName.trim()) return;
-    setMembers((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        name: newName.trim(),
-        email: newEmail.trim() || `${newName.toLowerCase().replace(/\s+/g, "")}@example.com`,
-        isOwner: false,
-        avatar: null,
-      },
-    ]);
-    setNewName("");
-    setNewEmail("");
-    setShowAddModal(false);
+  const handleAddMember = async () => {
+    if (!newEmail.trim()) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/auth/profile/by-email?email=${encodeURIComponent(newEmail.trim())}`);
+      let displayName = newEmail.trim(); // fallback to email
+      if (res.ok) {
+        const data = await res.json();
+        if (data.display_name) displayName = data.display_name;
+      }
+      setMembers((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          name: displayName,
+          email: newEmail.trim(),
+          isOwner: false,
+          avatar: null,
+        },
+      ]);
+      setNewEmail("");
+      setShowAddModal(false);
+    } catch (err) {
+      // if lookup fails, just use email
+      setMembers((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          name: newEmail.trim(),
+          email: newEmail.trim(),
+          isOwner: false,
+          avatar: null,
+        },
+      ]);
+      setNewEmail("");
+      setShowAddModal(false);
+    }
   };
 
   const confirmDelete = (id: string) => {
@@ -241,17 +262,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
             </div>
             <div className="modal-body">
               <div className="modal-field">
-                <label className="modal-label">Full Name</label>
-                <input
-                  className="modal-input"
-                  type="text"
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                />
-              </div>
-              <div className="modal-field">
-                <label className="modal-label">Email (optional)</label>
+                <label className="modal-label">Email</label>
                 <input
                   className="modal-input"
                   type="email"
