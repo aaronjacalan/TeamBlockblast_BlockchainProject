@@ -1,74 +1,62 @@
 # AGENTS.md — FairShare
 
-## Project Structure
+## Project layout
 
 Two independent packages, no workspace tooling:
 
-- `frontend/` — React 19 + TypeScript + Vite app. Entry: `src/main.tsx`
+- `frontend/` — React 19 + TypeScript 6.0 + Vite 8. Entry: `src/main.tsx`
 - `backend/` — Python FastAPI server. Entry: `main.py`
 
 ## Frontend
 
-### Dev server
-```bash
-cd frontend && npm install && npm run dev
-```
-Runs at `http://localhost:5173`.
+### Commands (run from `frontend/`)
+| Command | What it does |
+|---|---|
+| `npm run dev` | Vite dev server on `:5173` |
+| `npm run build` | `tsc -b && vite build` — **tsc errors block build** |
+| `npm run lint` | ESLint flat config (`eslint.config.js`) |
+| `npm run preview` | Vite preview of production build |
 
-### Build
-```bash
-cd frontend && npm run build
-```
-Runs `tsc -b && vite build`. **TypeScript errors block the build**, including `noUnusedLocals` and `noUnusedParameters` (both enabled in `tsconfig.app.json`).
+`noUnusedLocals` and `noUnusedParameters` are enabled — unused imports/vars are build errors.
 
-### Vite plugins required for build
-`vite.config.ts` loads four plugins; the WASM/polyfill ones are non-optional because the Cardano Mesh SDK relies on them:
-- `@vitejs/plugin-react`
-- `vite-plugin-wasm`
-- `vite-plugin-top-level-await`
-- `vite-plugin-node-polyfills`
+### Vite config quirks (`vite.config.ts`)
+- Four required plugins: `@vitejs/plugin-react`, `vite-plugin-wasm`, `vite-plugin-top-level-await`, `vite-plugin-node-polyfills`. Removing any breaks the Cardano Mesh SDK module resolution.
+- `define: { global: 'globalThis' }` — needed by Mesh polyfills.
+- **Proxy**: `/api/*` → `http://localhost:8000`. The frontend uses both the proxy (`/api/...`) AND direct hardcoded URLs (`http://localhost:8000/api/...`) inconsistently. Both work in dev; only hardcoded URLs work in production.
 
-Do not remove these or the build will fail with module-resolution errors.
+### Wallet / blockchain
+- Uses `@meshsdk/react`, `@meshsdk/core`, `@meshsdk/wallet`.
+- App tree wrapped in `<MeshProvider>` (in `main.tsx`), imports `@meshsdk/react/styles.css`.
+- Login: nonce-based Cardano wallet signature flow (`POST /api/auth/nonce` → `wallet.signData()` → `POST /api/auth/verify`).
+- Blockfrost provider at `src/utils/provider.ts` reads `import.meta.env.VITE_BLOCKFROST_API_KEY`.
 
 ### Environment
-`frontend/.env` is already tracked and contains `VITE_BLOCKFROST_API_KEY`.
+- `frontend/.env` tracked — contains `VITE_BLOCKFROST_API_KEY`.
 
 ## Backend
 
-### Run server
+### Commands (run from `backend/`)
 ```bash
-cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload
+uvicorn main:app --reload        # or python main.py
 ```
-Or: `python main.py` (convenience wrapper if present).
+Runs on `:8000`, API docs at `/docs`.
 
-Runs at `http://localhost:8000`. API docs auto-generated at `/docs`.
+Dependencies: `fastapi`, `uvicorn`, `supabase`, `python-dotenv`.
 
-### Environment variables
-Backend needs a `.env` with:
-```env
-SUPABASE_URL=<url>
-SUPABASE_KEY=<key>
-```
-The repo currently contains `backend/.env` with values already filled in.
+### Router mounting (`backend/main.py`)
+| Prefix | Router | Routes |
+|---|---|---|
+| `/api` | `auth` | `/api/auth/nonce`, `/api/auth/verify`, `/api/profile`, `/api/profile/by-email` |
+| `/api/auth` | `auth` | duplicate — same routes nested under `/api/auth/auth/...` (likely a bug, leave as-is) |
+| `/api/groups` | `groups` | group CRUD, invites, members, activities |
+| `/api/expenses` | `expenses` | expense CRUD, splits, `/summary` |
 
-### Architecture notes
-- `main.py` mounts routers from `routes/auth.py` (`/api/auth`) and `routes/groups.py` (`/api/groups`).
-- `database.py` initializes a Supabase client on import; it will crash at runtime if `SUPABASE_URL`/`SUPABASE_KEY` are missing.
-- CORS is wide-open (`allow_origins=["*"]`).
+### Environment
+`backend/.env` needs `SUPABASE_URL` and `SUPABASE_KEY`. Both are currently filled in and tracked (`.env` is **not** gitignored for backend).
 
-## Testing
+`database.py` creates the Supabase client at module import — crashes at startup if env vars are missing.
 
-No test suite exists in either package yet.
+CORS wide-open (`allow_origins=["*"]`).
 
-## Lint / Type-check
-
-- Frontend: `npm run lint` (ESLint, flat config in `eslint.config.js`).
-- No backend linter/formatter config is present.
-
-## Important conventions
-
-- The frontend calls the backend via hardcoded `http://localhost:8000/api/...` URLs (see `App.tsx` and page components).
-- Wallet connection uses `@meshsdk/react` + `@meshsdk/core`. The app wraps the tree in `<MeshProvider>` and imports `@meshsdk/react/styles.css`.
-- React StrictMode is enabled.
+### No tests, no CI, no pre-commit hooks exist in either package.
