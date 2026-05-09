@@ -124,7 +124,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
                       Members
                     </span>
                     <span className="text-headline-sm">
-                      {g.members?.length || 0}
+                      {g.group_members?.length || 0}
                     </span>
                   </div>
                 </button>
