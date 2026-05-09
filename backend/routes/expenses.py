@@ -82,6 +82,65 @@ def create_expense(data: ExpenseCreate):
     return expense
 
 
+class SettleRequest(BaseModel):
+    group_id: str
+    from_user_id: str   # the person who paid (settling their debt)
+    to_user_id: str     # the person who was owed
+    tx_hash: str
+
+
+@router.patch("/settle")
+def settle_splits(data: SettleRequest):
+    # find all expenses in this group where to_user paid and from_user owes
+    expenses_result = (
+        supabase.table("expenses")
+        .select("id")
+        .eq("group_id", data.group_id)
+        .eq("paid_by", data.to_user_id)
+        .execute()
+    )
+    if not expenses_result.data:
+        return {"message": "No expenses to settle", "settled": 0}
+
+    expense_ids = [e["id"] for e in expenses_result.data]
+    settled_count = 0
+
+    for expense_id in expense_ids:
+        # mark the split for from_user as settled
+        split_result = (
+            supabase.table("expense_splits")
+            .update({"is_settled": True})
+            .eq("expense_id", expense_id)
+            .eq("user_id", data.from_user_id)
+            .execute()
+        )
+        if split_result.data:
+            settled_count += 1
+
+        # check if all splits for this expense are now settled
+        splits = (
+            supabase.table("expense_splits")
+            .select("is_settled")
+            .eq("expense_id", expense_id)
+            .execute()
+        )
+        all_settled = all(s["is_settled"] for s in splits.data) if splits.data else False
+        if all_settled:
+            supabase.table("expenses").update({
+                "tx_status": "settled",
+                "tx_hash": data.tx_hash,
+            }).eq("id", expense_id).execute()
+
+    log_activity(
+        data.from_user_id,
+        data.group_id,
+        "expense_settled",
+        f"Settled {settled_count} split(s) — tx {data.tx_hash[:12]}..."
+    )
+
+    return {"message": "Splits settled", "settled": settled_count}
+
+
 @router.delete("/{expense_id}")
 def delete_expense(expense_id: str):
     # delete splits first

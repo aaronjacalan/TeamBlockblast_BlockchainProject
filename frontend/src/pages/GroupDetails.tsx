@@ -56,6 +56,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
   const [settleUpAddress, setSettleUpAddress] = useState("");
   const [settleUpAmount, setSettleUpAmount] = useState("");
+  const [settleUpMemberId, setSettleUpMemberId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Edit Group Modal
@@ -271,10 +272,26 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       const signedTx = await wallet.signTxReturnFullTx(unsignedTx, false);
       const txHash = await wallet.submitTx(signedTx);
 
+      // POST: mark splits as settled in the database
+      await fetch("/api/expenses/settle", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: groupId,
+          from_user_id: userId,
+          to_user_id: settleUpMemberId,
+          tx_hash: txHash,
+        }),
+      });
+
+      await fetchExpenses();
+      onExpenseAdded();
+
       alert(`Transaction successful!\nHash: ${txHash}`);
       setShowSettleUpModal(false);
       setSettleUpAddress("");
       setSettleUpAmount("");
+      setSettleUpMemberId("");
     } catch (error) {
       console.error("Transaction failed:", error);
       alert("Transaction failed. See console for details.");
@@ -373,7 +390,26 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                           <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
                           <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
                             Paid by <strong style={{ color: "#000" }}>{exp.paid_by}</strong>
-                            {" · "}{exp.tx_status}
+                            <span
+                              style={{
+                                display: "inline-block",
+                                marginLeft: 10,
+                                padding: "2px 8px",
+                                borderRadius: 6,
+                                fontSize: 10,
+                                fontWeight: 600,
+                                textTransform: "uppercase",
+                                letterSpacing: "0.04em",
+                                background: exp.tx_status === "settled"
+                                  ? "var(--color-tertiary-light)"
+                                  : "#fef9c3",
+                                color: exp.tx_status === "settled"
+                                  ? "var(--color-tertiary)"
+                                  : "#a16207",
+                              }}
+                            >
+                              {exp.tx_status}
+                            </span>
                           </p>
                         </div>
                       </div>
@@ -642,21 +678,76 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
       {/* Settle Up Modal */}
       {showSettleUpModal && (
-        <div className="modal-backdrop" onClick={() => setShowSettleUpModal(false)}>
+        <div className="modal-backdrop" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="text-headline-sm">Settle Up via Cardano</h2>
-              <button className="modal-close-btn" onClick={() => setShowSettleUpModal(false)}>
+              <button className="modal-close-btn" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div className="modal-body">
               <p className="text-body-md" style={{ marginBottom: "16px", color: "var(--color-zinc-500)" }}>
-                Send testnet ADA (tADA) directly to a member's wallet address using your connected wallet.
+                Send ADA directly to settle your balance with a group member.
               </p>
+
               <div className="modal-field">
-                <label className="modal-label">Recipient Testnet Address</label>
+                <label className="modal-label">Member to Settle With</label>
+                <select
+                  className="modal-input"
+                  value={settleUpMemberId}
+                  onChange={(e) => {
+                    setSettleUpMemberId(e.target.value);
+                    const balance = balanceMap[e.target.value] || 0;
+                    if (balance < 0) {
+                      setSettleUpAmount(Math.abs(balance).toFixed(2));
+                    } else {
+                      setSettleUpAmount("");
+                    }
+                  }}
+                >
+                  <option value="">-- Select a member --</option>
+                  {group.group_members
+                    ?.filter((m) => m.user_id !== userId)
+                    .map((m) => {
+                      const balance = balanceMap[m.user_id] || 0;
+                      const label = balance < 0
+                        ? `You owe ${Math.abs(balance).toFixed(2)} ADA`
+                        : balance > 0
+                        ? `Owes you ${balance.toFixed(2)} ADA`
+                        : "Settled";
+                      const shortAddr = m.stake_address?.slice(0, 12) || m.user_id?.slice(0, 8);
+                      return (
+                        <option key={m.user_id} value={m.user_id}>
+                          {shortAddr} — {label}
+                        </option>
+                      );
+                    })}
+                </select>
+              </div>
+
+              {settleUpMemberId && (
+                <div style={{
+                  marginTop: 12,
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  background: balanceMap[settleUpMemberId] < 0
+                    ? "var(--color-error-light)"
+                    : "var(--color-tertiary-light)",
+                  fontSize: 13,
+                  color: balanceMap[settleUpMemberId] < 0 ? "var(--color-error)" : "var(--color-tertiary)",
+                }}>
+                  {balanceMap[settleUpMemberId] < 0
+                    ? `You owe this member ADA ${Math.abs(balanceMap[settleUpMemberId]).toFixed(2)}`
+                    : balanceMap[settleUpMemberId] > 0
+                    ? `This member owes you ADA ${balanceMap[settleUpMemberId].toFixed(2)}`
+                    : "No outstanding balance"}
+                </div>
+              )}
+
+              <div className="modal-field">
+                <label className="modal-label">Recipient Wallet Address</label>
                 <input
                   className="modal-input"
                   type="text"
@@ -681,10 +772,10 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(false)} disabled={isSubmitting}>
+              <button className="btn btn-secondary" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }} disabled={isSubmitting}>
                 Cancel
               </button>
-              <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting}>
+              <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting || !settleUpMemberId}>
                 {isSubmitting ? "Processing..." : "Sign & Send"}
               </button>
             </div>
