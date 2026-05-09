@@ -10,9 +10,10 @@ interface DashboardProps {
   onSelectGroup: (groupId: string) => void;
   groups: any[];
   activities: any[];
+  summary: { you_are_owed: number; you_owe: number };
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities }) => {
+const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities, summary }) => {
   console.log("groups data:", groups);
   return (
     <main className="dashboard page-offset">
@@ -37,17 +38,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
                 <div className="db-balance-divider" />
                 <div>
                   <span className="text-label-sm db-balance-label">You are owed</span>
-                  <div className="db-balance-amount">
-                    <span className="db-currency">{CURRENCY}</span>
-                    <span className="db-big-num">4,250.00</span>
+                  <div className="db-balance-amount db-balance-amount-purple">
+                    <span className="db-currency db-currency-purple">ADA</span>
+                    <span className="db-big-num">{summary.you_are_owed.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
                 <div className="db-balance-divider" />
                 <div>
                   <span className="text-label-sm db-balance-label">You owe</span>
                   <div className="db-balance-amount">
-                    <span className="db-currency">{CURRENCY}</span>
-                    <span className="db-big-num db-big-num-dark">1,120.45</span>
+                    <span className="db-currency">ADA</span>
+                    <span className="db-big-num db-big-num-dark">{summary.you_owe.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
               </div>

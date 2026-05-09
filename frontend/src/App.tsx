@@ -28,6 +28,17 @@ const App: React.FC = () => {
   const [activities, setActivities] = useState<any[]>([]);
 
   const isLoggedIn = Boolean(walletAddress);
+  const [summary, setSummary] = useState({ you_are_owed: 0, you_owe: 0 });
+
+  const fetchSummary = async (id: string) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/expenses/summary?user_id=${id}`);
+      const data = await res.json();
+      setSummary(data);
+    } catch (err) {
+      console.error("Failed to fetch summary");
+    }
+  };
 
   const fetchActivities = async (id: string) => {
     try {
@@ -124,6 +135,7 @@ const App: React.FC = () => {
             setWalletAddress(user.stake_address);
             await fetchGroups(user.id);  // pass user.id directly
             await fetchActivities(user.id);
+            await fetchSummary(user.id);
             navigate("dashboard");
           }}
         />
@@ -133,6 +145,7 @@ const App: React.FC = () => {
         <Dashboard
           groups={groups}
           activities={activities}
+          summary={summary}
           onNavigate={navigate}
           onCreateGroup={() => setCreateGroupOpen(true)}
           onSelectGroup={navigateToGroup}
@@ -164,7 +177,13 @@ const App: React.FC = () => {
         <GroupDetails
           groupId={selectedGroupId}
           userId={userId}
-          onExpenseAdded={() => fetchActivities(userId)}
+          onExpenseAdded={async () => {
+            await fetchActivities(userId);
+            await fetchSummary(userId);
+          }}
+          onExpenseDeleted={async () => {
+            await fetchSummary(userId);
+          }}
         />
       )}
 

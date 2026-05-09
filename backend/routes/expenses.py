@@ -89,3 +89,51 @@ def delete_expense(expense_id: str):
     # delete expense
     supabase.table("expenses").delete().eq("id", expense_id).execute()
     return {"message": "Expense deleted"}
+
+
+@router.get("/summary")
+def get_user_summary(user_id: str):
+    # get groups user belongs to
+    member_result = (
+        supabase.table("group_members")
+        .select("group_id")
+        .eq("user_id", user_id)
+        .execute()
+    )
+    group_ids = [m["group_id"] for m in member_result.data]
+
+    if not group_ids:
+        return {"you_are_owed": 0, "you_owe": 0}
+
+    # get all expenses in those groups
+    expenses_result = (
+        supabase.table("expenses")
+        .select("*, expense_splits(user_id, amount_owed, is_settled)")
+        .in_("group_id", group_ids)
+        .execute()
+    )
+
+    # net balance per person: positive = they owe you, negative = you owe them
+    balance_per_person: dict[str, float] = {}
+
+    for expense in expenses_result.data:
+        for split in expense.get("expense_splits", []):
+            if split["is_settled"]:
+                continue
+            if expense["paid_by"] == user_id and split["user_id"] != user_id:
+                # you paid, they owe you
+                other = split["user_id"]
+                balance_per_person[other] = balance_per_person.get(other, 0) + split["amount_owed"]
+            elif split["user_id"] == user_id and expense["paid_by"] != user_id:
+                # they paid, you owe them
+                other = expense["paid_by"]
+                balance_per_person[other] = balance_per_person.get(other, 0) - split["amount_owed"]
+
+    # sum up netted balances
+    total_owed_to_you = sum(v for v in balance_per_person.values() if v > 0)
+    total_you_owe = sum(abs(v) for v in balance_per_person.values() if v < 0)
+
+    return {
+        "you_are_owed": round(total_owed_to_you, 6),
+        "you_owe": round(total_you_owe, 6),
+    }

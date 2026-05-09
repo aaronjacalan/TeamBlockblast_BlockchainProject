@@ -41,9 +41,10 @@ interface GroupDetailsProps {
   groupId: string;
   userId: string;
   onExpenseAdded: () => void;
+  onExpenseDeleted: () => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded }) => {
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onExpenseDeleted }) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -151,6 +152,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     try {
       await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
       setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+      onExpenseDeleted(); // add this
     } catch (err) {
       alert("Failed to delete expense.");
     }
@@ -232,7 +234,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
   const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
 
-  // calculate per-member balances
   // for each member, calculate: what they paid - their equal share
   const balanceMap: Record<string, number> = {};
 
