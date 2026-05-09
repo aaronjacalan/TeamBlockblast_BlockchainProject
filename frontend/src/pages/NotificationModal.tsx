@@ -29,14 +29,13 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose }) => {
       ),
     },
     {
-      id: "payment-1",
+      id: "payment-due-1",
       type: "payment" as const,
       unread: true,
       time: "5h ago",
       message: (
         <span>
-          Reminder: You have a pending balance of{" "}
-          <strong className="notification-modal-highlight">45.50 ADA</strong> in{" "}
+          Payment due: <strong className="notification-modal-highlight">45.50 ADA</strong> in{" "}
           <strong>Roommates</strong> group.
         </span>
       ),
@@ -60,56 +59,25 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose }) => {
       footer: <span className="notification-modal-status">Accepted</span>,
     },
     {
-      id: "payment-2",
+      id: "status-1",
       type: "payment" as const,
-      unread: true,
+      unread: false,
       time: "1d ago",
       message: (
         <span>
-          Payment due: <strong className="notification-modal-highlight">12.00 ADA</strong> for{" "}
-          <strong>Weekend Groceries</strong>.
+          Group settled: <strong>Weekend Groceries</strong> is fully paid.
         </span>
       ),
-      footer: (
-        <button className="notification-modal-link">
-          Pay Now
-          <span className="material-symbols-outlined">chevron_right</span>
-        </button>
-      ),
+      footer: <span className="notification-modal-status">Settled</span>,
     },
     {
       id: "invite-3",
       type: "invite" as const,
-      unread: false,
+      unread: true,
       time: "2d ago",
       message: (
         <span>
           <strong>Maya</strong> invited you to <strong>Beach House</strong>
-        </span>
-      ),
-      footer: <span className="notification-modal-status">Declined</span>,
-    },
-    {
-      id: "payment-3",
-      type: "payment" as const,
-      unread: false,
-      time: "3d ago",
-      message: (
-        <span>
-          You settled <strong className="notification-modal-highlight">8.75 ADA</strong> in{" "}
-          <strong>Apartment</strong>.
-        </span>
-      ),
-      footer: <span className="notification-modal-status">Completed</span>,
-    },
-    {
-      id: "invite-4",
-      type: "invite" as const,
-      unread: true,
-      time: "4d ago",
-      message: (
-        <span>
-          <strong>Chris</strong> invited you to <strong>Road Trip</strong>
         </span>
       ),
       actions: (
@@ -120,40 +88,10 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose }) => {
       ),
     },
     {
-      id: "payment-4",
-      type: "payment" as const,
-      unread: true,
-      time: "5d ago",
-      message: (
-        <span>
-          Reminder: <strong className="notification-modal-highlight">22.40 ADA</strong> pending for{" "}
-          <strong>Utilities</strong>.
-        </span>
-      ),
-      footer: (
-        <button className="notification-modal-link">
-          Settle Now
-          <span className="material-symbols-outlined">chevron_right</span>
-        </button>
-      ),
-    },
-    {
-      id: "invite-5",
-      type: "invite" as const,
-      unread: false,
-      time: "6d ago",
-      message: (
-        <span>
-          <strong>Priya</strong> invited you to <strong>Office Lunch</strong>
-        </span>
-      ),
-      footer: <span className="notification-modal-status">Accepted</span>,
-    },
-    {
-      id: "payment-5",
+      id: "payment-received-1",
       type: "payment" as const,
       unread: false,
-      time: "1w ago",
+      time: "3d ago",
       message: (
         <span>
           Payment received: <strong className="notification-modal-highlight">15.00 ADA</strong> from{" "}
