@@ -19,6 +19,9 @@ class GroupInviteCreate(BaseModel):
     group_id: str
     created_by: str  # user uuid
 
+class InviteByEmail(BaseModel):
+    email: str
+    invited_by: str  # user_id of who is inviting
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -251,3 +254,57 @@ def remove_member(group_id: str, user_id: str, requester_id: str):
     log_activity(requester_id, group_id, "member_removed", f"Removed a member from the group")
 
     return {"message": "Member removed successfully"}
+
+
+@router.post("/{group_id}/invite")
+def invite_by_email(group_id: str, data: InviteByEmail):
+    # verify group exists
+    group_result = supabase.table("groups").select("id, name").eq("id", group_id).execute()
+    if not group_result.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    group = group_result.data[0]
+
+    # find user by email
+    user_result = supabase.table("users").select("id").eq("email", data.email.strip()).execute()
+    if not user_result.data:
+        raise HTTPException(status_code=404, detail="User not found. They need to sign up first.")
+
+    invited_user_id = user_result.data[0]["id"]
+
+    # check if already a member
+    existing = (
+        supabase.table("group_members")
+        .select("id")
+        .eq("group_id", group_id)
+        .eq("user_id", invited_user_id)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(status_code=400, detail="User is already a member of this group")
+
+    # check if already invited
+    existing_notif = (
+        supabase.table("notifications")
+        .select("id")
+        .eq("user_id", invited_user_id)
+        .eq("type", "group_invite")
+        .eq("metadata->>group_id", group_id)
+        .execute()
+    )
+    if existing_notif.data:
+        raise HTTPException(status_code=400, detail="User has already been invited")
+
+    # create notification for the invited user
+    supabase.table("notifications").insert({
+        "user_id": invited_user_id,
+        "type": "group_invite",
+        "title": "Group Invite",
+        "message": f"You've been invited to join \"{group['name']}\"",
+        "metadata": {
+            "group_id": group_id,
+            "invited_by": data.invited_by,
+        }
+    }).execute()
+
+    return {"message": "Invite sent successfully"}

@@ -72,9 +72,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
   // Add Member Modal
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
-  const [inviteLink, setInviteLink] = useState("");
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [newMemberName, setNewMemberName] = useState("");
   const [newMemberEmail, setNewMemberEmail] = useState("");
 
   // Delete Member Modal
@@ -155,25 +152,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       onExpenseDeleted(); // add this
     } catch (err) {
       alert("Failed to delete expense.");
-    }
-  };
-
-  const handleGenerateInvite = async () => {
-    setInviteLoading(true);
-    try {
-      const res = await fetch("/api/groups/invites", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ group_id: groupId, created_by: userId }),
-      });
-      if (!res.ok) throw new Error("Failed to generate invite");
-      const data = await res.json();
-      const link = `${window.location.origin}/invite/${data.invite_code}`;
-      setInviteLink(link);
-    } catch (err) {
-      alert("Failed to generate invite link.");
-    } finally {
-      setInviteLoading(false);
     }
   };
 
@@ -588,17 +566,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
             </div>
             <div className="modal-body">
               <div className="modal-field">
-                <label className="modal-label">Full Name</label>
-                <input
-                  className="modal-input"
-                  type="text"
-                  placeholder="e.g. Juan Dela Cruz"
-                  value={newMemberName}
-                  onChange={(e) => setNewMemberName(e.target.value)}
-                />
-              </div>
-              <div className="modal-field">
-                <label className="modal-label">Email (optional)</label>
+                <label className="modal-label">Email</label>
                 <input
                   className="modal-input"
                   type="email"
@@ -610,11 +578,30 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
             </div>
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowAddMemberModal(false)}>Cancel</button>
-              <button className="btn btn-dark" onClick={() => {
-                // just close for now, backend invite flow comes later
-                setShowAddMemberModal(false);
+              <button className="btn btn-dark" onClick={async () => {
+                if (!newMemberEmail.trim()) return;
+                try {
+                  const res = await fetch(`/api/groups/${groupId}/invite`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                      email: newMemberEmail.trim(),
+                      invited_by: userId,
+                    }),
+                  });
+                  if (!res.ok) {
+                    const err = await res.json();
+                    alert(err.detail);
+                    return;
+                  }
+                  alert("Invite sent!");
+                  setNewMemberEmail("");
+                  setShowAddMemberModal(false);
+                } catch (err) {
+                  alert("Failed to send invite.");
+                }
               }}>
-                Add Member
+                Send Invite
               </button>
             </div>
           </div>
