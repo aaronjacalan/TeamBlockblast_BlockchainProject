@@ -4,18 +4,30 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 
 interface SettingsProps {
   walletAddress: string;
+  userId: string;
   onNavigate: (page: Page) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ walletAddress, onNavigate }) => {
+const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }) => {
   const [email, setEmail] = useState("aditya@email.com");
   const [saved, setSaved] = useState(false);
   const [groupActivity, setGroupActivity] = useState(true);
   const [settlements, setSettlements] = useState(true);
 
-  const handleSave = () => {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2500);
+  const handleSave = async () => {
+    if (!email.trim()) return;
+    try {
+      const res = await fetch("http://localhost:8000/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, email: email.trim() }),
+      });
+      if (!res.ok) throw new Error("Failed to save");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2500);
+    } catch (err) {
+      alert("Failed to save email. Please try again.");
+    }
   };
 
   const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;

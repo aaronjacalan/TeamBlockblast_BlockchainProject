@@ -14,3 +14,4 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api")
 app.include_router(groups.router, prefix="/api/groups")
 app.include_router(expenses.router, prefix="/api/expenses")
+app.include_router(auth.router, prefix="/api/auth")

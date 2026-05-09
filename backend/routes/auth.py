@@ -16,6 +16,11 @@ class VerifyRequest(BaseModel):
     signed_message: str
 
 
+class UpdateProfile(BaseModel):
+    user_id: str
+    email: str
+
+
 @router.post("/auth/nonce")
 def request_nonce(data: NonceRequest):
     stake_address = data.stake_address.strip()
@@ -84,3 +89,26 @@ def verify_signature(data: VerifyRequest):
     },
     "message": "Welcome back!"
 }
+    
+
+@router.put("/profile")
+def update_profile(data: UpdateProfile):
+    if not data.email.strip():
+        raise HTTPException(status_code=400, detail="Email is required")
+
+    result = supabase.table("users").update({
+        "email": data.email.strip()
+    }).eq("id", data.user_id).execute()
+
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return result.data[0]
+
+
+@router.get("/profile")
+def get_profile(user_id: str):
+    result = supabase.table("users").select("*").eq("id", user_id).single().execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="User not found")
+    return result.data

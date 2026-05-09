@@ -190,6 +190,7 @@ const App: React.FC = () => {
       {currentPage === "settings" && (
         <Settings
           walletAddress={walletAddress}
+          userId={userId}
           onNavigate={navigate}
         />
       )}
