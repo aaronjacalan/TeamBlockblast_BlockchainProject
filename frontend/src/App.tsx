@@ -205,7 +205,15 @@ const App: React.FC = () => {
       {currentPage !== "login" && <Footer />}
 
       {notificationsOpen && (
-        <NotificationModal onClose={() => setNotificationsOpen(false)} />
+        <NotificationModal
+          onClose={() => setNotificationsOpen(false)}
+          userId={userId}
+          onInviteAccepted={async () => {
+            await fetchGroups(userId);
+            await fetchActivities(userId);
+            await fetchSummary(userId);
+          }}
+        />
       )}
     </>
   );
