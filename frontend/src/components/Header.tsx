@@ -7,6 +7,7 @@ interface HeaderProps {
   onNavigate: (page: Page) => void;
   walletAddress: string;
   onLogout: () => void;
+  onOpenNotifications: () => void;
 }
 
 const Header: React.FC<HeaderProps> = ({
@@ -14,6 +15,7 @@ const Header: React.FC<HeaderProps> = ({
   onNavigate,
   walletAddress,
   onLogout,
+  onOpenNotifications,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -75,7 +77,7 @@ const Header: React.FC<HeaderProps> = ({
         </div>
 
         <div className="header-actions">
-          <button className="icon-btn">
+          <button className="icon-btn" onClick={onOpenNotifications}>
             <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
               notifications
             </span>

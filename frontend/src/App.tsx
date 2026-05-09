@@ -8,6 +8,7 @@ import Groups from "./pages/Groups";
 import CreateGroup from "./pages/CreateGroup";
 import GroupDetails from "./pages/GroupDetails";
 import Settings from "./pages/Settings";
+import NotificationModal from "./pages/NotificationModal";
 
 type Page =
   | "landing"
@@ -26,6 +27,7 @@ const App: React.FC = () => {
   const [groups, setGroups] = useState<any[]>([]);
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [activities, setActivities] = useState<any[]>([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
 
   const isLoggedIn = Boolean(walletAddress);
   const [summary, setSummary] = useState({ you_are_owed: 0, you_owe: 0 });
@@ -119,6 +121,7 @@ const App: React.FC = () => {
           onNavigate={navigate}
           walletAddress={walletAddress}
           onLogout={handleLogout}
+          onOpenNotifications={() => setNotificationsOpen(true)}
         />
       )}
 
@@ -200,6 +203,10 @@ const App: React.FC = () => {
       )}
 
       {currentPage !== "login" && <Footer />}
+
+      {notificationsOpen && (
+        <NotificationModal onClose={() => setNotificationsOpen(false)} />
+      )}
     </>
   );
 };
