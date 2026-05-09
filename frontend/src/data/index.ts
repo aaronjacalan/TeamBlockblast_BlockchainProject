@@ -1,4 +1,4 @@
-export const CURRENCY = "₱";
+export const CURRENCY = "ADA";
 export const CURRENCY_LABEL = "PHP";
 
 export interface ActivityItem {

@@ -1,4 +1,5 @@
 import React from "react";
+import { useLovelace } from "@meshsdk/react";
 import "./Dashboard.css";
 import { CURRENCY } from "../data";
 
@@ -14,6 +15,9 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities, summary }) => {
+  const lovelace = useLovelace();
+  const walletBalance = lovelace ? (parseInt(lovelace) / 1_000_000).toFixed(2) : "0.00";
+
   console.log("groups data:", groups);
   return (
     <main className="dashboard page-offset">
@@ -32,7 +36,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
                   <span className="text-label-sm db-wallet-label">Wallet Balance</span>
                   <div className="db-balance-amount">
                     <span className="db-wallet-currency">{CURRENCY}</span>
-                    <span className="db-wallet-num">5,000.00</span>
+                    <span className="db-wallet-num">{walletBalance}</span>
                   </div>
                 </div>
                 <div className="db-balance-divider" />
