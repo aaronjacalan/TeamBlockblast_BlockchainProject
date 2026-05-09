@@ -20,6 +20,11 @@ interface Expense {
   tx_hash: string | null;
   tx_status: string;
   created_at: string;
+  expense_splits: {
+    user_id: string;
+    amount_owed: number;
+    is_settled: boolean;
+  }[];
 }
 
 interface Group {
@@ -68,6 +73,8 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [inviteLink, setInviteLink] = useState("");
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [newMemberName, setNewMemberName] = useState("");
+  const [newMemberEmail, setNewMemberEmail] = useState("");
 
   // Delete Member Modal
   const [showDeleteMemberModal, setShowDeleteMemberModal] = useState(false);
@@ -218,10 +225,31 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
   const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
   const memberCount = group.group_members?.length || 1;
-  const yourShare = expenses.reduce((sum, e) => sum + (e.amount / memberCount), 0);
-  const yourBalance = youPaid - yourShare;
+  const yourShare = totalSpend / memberCount;
+  const netBalance = youPaid - yourShare;
+  const youAreOwed = netBalance > 0 ? netBalance : 0;
+  const youOwe = netBalance < 0 ? Math.abs(netBalance) : 0;
 
   const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
+
+  // calculate per-member balances
+  // for each member, calculate: what they paid - their equal share
+  const balanceMap: Record<string, number> = {};
+
+  group.group_members?.forEach((m) => {
+    if (m.user_id === userId) return; // skip yourself
+
+    const theyPaid = expenses
+      .filter(e => e.paid_by === m.user_id)
+      .reduce((sum, e) => sum + e.amount, 0);
+
+    const theirShare = totalSpend / memberCount;
+    const theirNet = theyPaid - theirShare;
+
+    // if their net is negative, they owe you
+    // if their net is positive, you owe them
+    balanceMap[m.user_id] = -theirNet;
+  });
 
   const submitSettleUp = async () => {
     if (!wallet) {
@@ -322,15 +350,17 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 </span>
               </div>
               <div className="gd-stat-card gd-stat-purple">
-                <span className="text-label-sm gd-stat-label gd-stat-label-purple">You Owe</span>
+                <span className="text-label-sm gd-stat-label gd-stat-label-purple">You Paid</span>
                 <span className="text-data-display gd-stat-value-purple">
                   ADA {youPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
               <div className="gd-stat-card gd-stat-error">
-                <span className="text-label-sm gd-stat-label gd-stat-label-error">You Are Owed</span>
+                <span className="text-label-sm gd-stat-label gd-stat-label-error">
+                  {netBalance >= 0 ? "You Are Owed" : "You Owe"}
+                </span>
                 <span className="text-data-display gd-stat-value-error">
-                  {yourBalance >= 0 ? "+" : ""}ADA {yourBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  ADA {(netBalance >= 0 ? youAreOwed : youOwe).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                 </span>
               </div>
             </div>
@@ -407,46 +437,64 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   </div>
 
                   <div className="gd-member-list">
-                    {group.group_members?.map((m, i) => (
-                    <div
-                      key={m.user_id ?? i}
-                        className={`gd-member-row ${m.user_id === userId ? "gd-member-you" : ""}`}
-                        style={{ position: "relative" }}
-                        onMouseEnter={(e) => {
-                          if (m.user_id !== userId) {
+                    {group.group_members?.map((m, i) => {
+                      const balance = balanceMap[m.user_id] || 0;
+                      const isYou = m.user_id === userId;
+                      return (
+                        <div
+                          key={m.user_id ?? i}
+                          className={`gd-member-row ${isYou ? "gd-member-you" : ""}`}
+                          style={{ position: "relative" }}
+                          onMouseEnter={(e) => {
+                            if (!isYou) {
+                              const btn = e.currentTarget.querySelector<HTMLButtonElement>(".gd-member-del-btn");
+                              if (btn) btn.style.opacity = "1";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
                             const btn = e.currentTarget.querySelector<HTMLButtonElement>(".gd-member-del-btn");
-                            if (btn) btn.style.opacity = "1";
-                          }
-                        }}
-                        onMouseLeave={(e) => {
-                          const btn = e.currentTarget.querySelector<HTMLButtonElement>(".gd-member-del-btn");
-                          if (btn) btn.style.opacity = "0";
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div className="cg-member-avatar-placeholder">
-                            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>person</span>
+                            if (btn) btn.style.opacity = "0";
+                          }}
+                        >
+                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                            <div className="cg-member-avatar-placeholder">
+                              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>person</span>
+                            </div>
+                            <div>
+                              <p className="text-label-md" style={{ lineHeight: 1 }}>
+                                {isYou ? "You" : m.stake_address?.slice(0, 12) + "..."}
+                              </p>
+                              <p style={{ fontSize: 10, color: "var(--color-zinc-400)", marginTop: 4 }}>
+                                {m.user_id === group.created_by ? "Creator" : "Member"}
+                              </p>
+                              {/* per-member balance */}
+                              {!isYou && (
+                                <p style={{
+                                  fontSize: 11,
+                                  marginTop: 4,
+                                  color: balance > 0 ? "var(--color-tertiary)" : balance < 0 ? "var(--color-error)" : "var(--color-zinc-400)"
+                                }}>
+                                  {balance > 0
+                                    ? `Owes you ADA ${balance.toFixed(2)}`
+                                    : balance < 0
+                                    ? `You owe ADA ${Math.abs(balance).toFixed(2)}`
+                                    : "Settled ✓"}
+                                </p>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <p className="text-label-md" style={{ lineHeight: 1 }}>
-                              {m.user_id === userId ? "You" : m.stake_address?.slice(0, 12) + "..."}
-                            </p>
-                            <p style={{ fontSize: 10, color: "var(--color-zinc-400)", marginTop: 4 }}>
-                              {m.user_id === group.created_by ? "Creator" : "Member"}
-                            </p>
-                          </div>
+                          {!isYou && (
+                            <button
+                              className="gd-member-del-btn"
+                              onClick={() => { setMemberToDelete(m.user_id); setShowDeleteMemberModal(true); }}
+                              style={{ opacity: 0, transition: "opacity 0.15s", background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-error)" }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_remove</span>
+                            </button>
+                          )}
                         </div>
-                        {m.user_id !== userId && (
-                          <button
-                            className="gd-member-del-btn"
-                            onClick={() => { setMemberToDelete(m.user_id); setShowDeleteMemberModal(true); }}
-                            style={{ opacity: 0, transition: "opacity 0.15s", background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-error)" }}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_remove</span>
-                          </button>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
 
                   <div className="gd-member-actions">
@@ -538,32 +586,35 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               </button>
             </div>
             <div className="modal-body">
-              {inviteLink ? (
-                <div className="modal-field">
-                  <label className="modal-label">Invite Link</label>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input className="modal-input" type="text" value={inviteLink} readOnly />
-                    <button className="btn btn-secondary" onClick={() => navigator.clipboard.writeText(inviteLink)}>
-                      Copy
-                    </button>
-                  </div>
-                  <p style={{ fontSize: 12, color: "var(--color-zinc-400)", marginTop: 8 }}>
-                    Link expires in 7 days.
-                  </p>
-                </div>
-              ) : (
-                <p className="text-body-md" style={{ color: "var(--color-zinc-500)" }}>
-                  Generate an invite link to share with new members. They'll join by connecting their Cardano wallet.
-                </p>
-              )}
+              <div className="modal-field">
+                <label className="modal-label">Full Name</label>
+                <input
+                  className="modal-input"
+                  type="text"
+                  placeholder="e.g. Juan Dela Cruz"
+                  value={newMemberName}
+                  onChange={(e) => setNewMemberName(e.target.value)}
+                />
+              </div>
+              <div className="modal-field">
+                <label className="modal-label">Email (optional)</label>
+                <input
+                  className="modal-input"
+                  type="email"
+                  placeholder="e.g. juan@email.com"
+                  value={newMemberEmail}
+                  onChange={(e) => setNewMemberEmail(e.target.value)}
+                />
+              </div>
             </div>
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowAddMemberModal(false)}>Close</button>
-              {!inviteLink && (
-                <button className="btn btn-dark" onClick={handleGenerateInvite} disabled={inviteLoading}>
-                  {inviteLoading ? "Generating..." : "Generate Link"}
-                </button>
-              )}
+              <button className="btn btn-secondary" onClick={() => setShowAddMemberModal(false)}>Cancel</button>
+              <button className="btn btn-dark" onClick={() => {
+                // just close for now, backend invite flow comes later
+                setShowAddMemberModal(false);
+              }}>
+                Add Member
+              </button>
             </div>
           </div>
         </div>
