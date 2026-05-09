@@ -13,6 +13,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities }) => {
+  console.log("groups data:", groups);
   return (
     <main className="dashboard page-offset">
       <div className="container dashboard-inner">
