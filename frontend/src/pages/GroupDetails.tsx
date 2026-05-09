@@ -42,9 +42,10 @@ interface GroupDetailsProps {
   userId: string;
   onExpenseAdded: () => void;
   onExpenseDeleted: () => void;
+  onMemberRemoved: () => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onExpenseDeleted }) => {
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onExpenseDeleted, onMemberRemoved }) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -162,6 +163,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
         method: "DELETE",
       });
       await fetchGroup();
+      onMemberRemoved(); // add this
     } catch (err) {
       alert("Failed to remove member.");
     } finally {
