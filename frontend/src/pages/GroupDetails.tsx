@@ -6,6 +6,8 @@ import "./GroupDetails.css";
 interface Member {
   id: string;
   user_id: string;
+  name?: string;
+  email?: string;
   stake_address: string;
   joined_at: string;
 }
@@ -56,8 +58,8 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
   const [settleUpAddress, setSettleUpAddress] = useState("");
   const [settleUpAmount, setSettleUpAmount] = useState("");
-  const [settleUpMemberId, setSettleUpMemberId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [settleUpMemberId, setSettleUpMemberId] = useState("");
 
   // Edit Group Modal
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -289,6 +291,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
       alert(`Transaction successful!\nHash: ${txHash}`);
       setShowSettleUpModal(false);
+      setSettleUpMemberId("");
       setSettleUpAddress("");
       setSettleUpAmount("");
       setSettleUpMemberId("");
@@ -298,6 +301,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const getMemberLabel = (uid: string): string => {
+    if (uid === userId) return "You";
+    const member = group?.group_members.find(m => m.user_id === uid);
+    if (!member) return uid;
+    return member.name || member.email || (member.stake_address?.slice(0, 12) + "...") || uid;
   };
 
   return (
@@ -328,7 +338,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
                   Edit Group
                 </button>
-                <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
+                <button className="btn btn-secondary" onClick={() => {
+                    setShowSettleUpModal(true);
+                  }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
                   Settle Up
                 </button>
@@ -389,27 +401,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                         <div>
                           <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
                           <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                            Paid by <strong style={{ color: "#000" }}>{exp.paid_by}</strong>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                marginLeft: 10,
-                                padding: "2px 8px",
-                                borderRadius: 6,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.04em",
-                                background: exp.tx_status === "settled"
-                                  ? "var(--color-tertiary-light)"
-                                  : "#fef9c3",
-                                color: exp.tx_status === "settled"
-                                  ? "var(--color-tertiary)"
-                                  : "#a16207",
-                              }}
-                            >
-                              {exp.tx_status}
-                            </span>
+                            Paid by <strong style={{ color: "#000" }}>{getMemberLabel(exp.paid_by)}</strong>
                           </p>
                         </div>
                       </div>
@@ -424,9 +416,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                           </p>
                         </div>
                         <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
-                          <button className="gd-expense-action-btn gd-action-edit">
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
-                          </button>
                           <button
                             className="gd-expense-action-btn gd-action-delete"
                             onClick={() => handleDeleteExpense(exp.id)}
@@ -568,7 +557,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 >
                   {group.group_members?.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
-                      {m.user_id === userId ? "You" : m.stake_address?.slice(0, 12) + "..."}
+                      {getMemberLabel(m.user_id)}
                     </option>
                   ))}
                 </select>
@@ -662,7 +651,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   <span className="material-symbols-outlined" style={{ color: "var(--color-error)", fontSize: 22 }}>person_remove</span>
                 </div>
                 <p className="text-body-md">
-                  Remove <strong>{memberToDeleteObj?.stake_address?.slice(0, 12)}...</strong> from this group?
+                  Remove <strong>{memberToDeleteObj ? getMemberLabel(memberToDeleteObj.user_id) : ""}</strong> from this group?
                 </p>
               </div>
             </div>
@@ -678,84 +667,70 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
       {/* Settle Up Modal */}
       {showSettleUpModal && (
-        <div className="modal-backdrop" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
+        <div className="modal-backdrop" onClick={() => {
+            setShowSettleUpModal(false);
+            setSettleUpMemberId("");
+            setSettleUpAddress("");
+            setSettleUpAmount("");
+          }}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="text-headline-sm">Settle Up via Cardano</h2>
-              <button className="modal-close-btn" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
+              <button className="modal-close-btn" onClick={() => {
+                setShowSettleUpModal(false);
+                setSettleUpMemberId("");
+                setSettleUpAddress("");
+                setSettleUpAmount("");
+              }}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div className="modal-body">
               <p className="text-body-md" style={{ marginBottom: "16px", color: "var(--color-zinc-500)" }}>
-                Send ADA directly to settle your balance with a group member.
+                Send testnet ADA (tADA) directly to a member's wallet using your connected wallet.
               </p>
 
               <div className="modal-field">
-                <label className="modal-label">Member to Settle With</label>
+                <label className="modal-label">Recipient</label>
                 <select
                   className="modal-input"
                   value={settleUpMemberId}
                   onChange={(e) => {
+                    const selected = group?.group_members.find(m => m.user_id === e.target.value);
                     setSettleUpMemberId(e.target.value);
-                    const balance = balanceMap[e.target.value] || 0;
-                    if (balance < 0) {
-                      setSettleUpAmount(Math.abs(balance).toFixed(2));
-                    } else {
-                      setSettleUpAmount("");
-                    }
+                    setSettleUpAddress(selected?.stake_address || "");
+                    const owed = balanceMap[e.target.value];
+                    setSettleUpAmount(owed < 0 ? Math.abs(owed).toFixed(6) : "");
                   }}
                 >
-                  <option value="">-- Select a member --</option>
-                  {group.group_members
-                    ?.filter((m) => m.user_id !== userId)
-                    .map((m) => {
-                      const balance = balanceMap[m.user_id] || 0;
-                      const label = balance < 0
-                        ? `You owe ${Math.abs(balance).toFixed(2)} ADA`
-                        : balance > 0
-                        ? `Owes you ${balance.toFixed(2)} ADA`
-                        : "Settled";
-                      const shortAddr = m.stake_address?.slice(0, 12) || m.user_id?.slice(0, 8);
-                      return (
-                        <option key={m.user_id} value={m.user_id}>
-                          {shortAddr} — {label}
-                        </option>
-                      );
-                    })}
+                  <option value="">Select a member...</option>
+                    {group?.group_members.filter(m => m.user_id !== userId && balanceMap[m.user_id] < 0).length === 0 
+                      ? <option disabled>You don't owe anyone right now 🎉</option>
+                      : group?.group_members
+                          .filter(m => m.user_id !== userId && balanceMap[m.user_id] < 0)
+                          .map(m => (
+                            <option key={m.user_id} value={m.user_id}>
+                              {getMemberLabel(m.user_id)} — ADA {Math.abs(balanceMap[m.user_id]).toFixed(2)}
+                            </option>
+                          ))
+                    }
                 </select>
               </div>
 
-              {settleUpMemberId && (
-                <div style={{
-                  marginTop: 12,
-                  padding: "12px 16px",
-                  borderRadius: 10,
-                  background: balanceMap[settleUpMemberId] < 0
-                    ? "var(--color-error-light)"
-                    : "var(--color-tertiary-light)",
-                  fontSize: 13,
-                  color: balanceMap[settleUpMemberId] < 0 ? "var(--color-error)" : "var(--color-tertiary)",
-                }}>
-                  {balanceMap[settleUpMemberId] < 0
-                    ? `You owe this member ADA ${Math.abs(balanceMap[settleUpMemberId]).toFixed(2)}`
-                    : balanceMap[settleUpMemberId] > 0
-                    ? `This member owes you ADA ${balanceMap[settleUpMemberId].toFixed(2)}`
-                    : "No outstanding balance"}
+              {/* Show resolved address as read-only confirmation */}
+              {settleUpAddress && (
+                <div className="modal-field">
+                  <label className="modal-label">Wallet Address</label>
+                  <input
+                    className="modal-input"
+                    type="text"
+                    value={settleUpAddress}
+                    readOnly
+                    style={{ color: "var(--color-zinc-400)", fontSize: 13, cursor: "default" }}
+                  />
                 </div>
               )}
-
-              <div className="modal-field">
-                <label className="modal-label">Recipient Wallet Address</label>
-                <input
-                  className="modal-input"
-                  type="text"
-                  placeholder="addr_test1..."
-                  value={settleUpAddress}
-                  onChange={(e) => setSettleUpAddress(e.target.value)}
-                />
-              </div>
 
               <div className="modal-field">
                 <label className="modal-label">Amount (ADA)</label>
@@ -769,10 +744,26 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   onChange={(e) => setSettleUpAmount(e.target.value)}
                 />
               </div>
+
+              {/* Show what they owe as a hint */}
+              {settleUpMemberId && balanceMap[settleUpMemberId] !== undefined && (
+                <p style={{ fontSize: 12, color: balanceMap[settleUpMemberId] < 0 ? "var(--color-error)" : "var(--color-zinc-400)", marginTop: -8 }}>
+                  {balanceMap[settleUpMemberId] < 0
+                    ? `You owe this member ADA ${Math.abs(balanceMap[settleUpMemberId]).toFixed(2)}`
+                    : balanceMap[settleUpMemberId] > 0
+                    ? `This member owes you ADA ${balanceMap[settleUpMemberId].toFixed(2)}`
+                    : "You're settled up with this member."}
+                </p>
+              )}
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }} disabled={isSubmitting}>
+              <button className="btn btn-secondary" onClick={() => {
+                setShowSettleUpModal(false);
+                setSettleUpMemberId("");
+                setSettleUpAddress("");
+                setSettleUpAmount("");
+              }} disabled={isSubmitting}>
                 Cancel
               </button>
               <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting || !settleUpMemberId}>
