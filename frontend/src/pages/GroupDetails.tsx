@@ -53,6 +53,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoveredExpense, setHoveredExpense] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"expenses" | "transactions">("expenses");
 
   // Settle Up Modal
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
@@ -60,6 +61,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [settleUpAmount, setSettleUpAmount] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [settleUpMemberId, setSettleUpMemberId] = useState("");
+  const [settlements, setSettlements] = useState<any[]>([]);
 
   // Edit Group Modal
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -85,6 +87,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   useEffect(() => {
     fetchGroup();
     fetchExpenses();
+    fetchSettlements();
   }, [groupId]);
 
   useEffect(() => {
@@ -93,6 +96,18 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       setEditGroupDescription(group.description || "");
     }
   }, [group]);
+
+  const fetchSettlements = async () => {
+    try {
+      const res = await fetch(`/api/expenses/settlements?group_id=${groupId}`);
+      if (!res.ok) throw new Error("Failed to fetch settlements");
+      const data = await res.json();
+      setSettlements(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error(err);
+      setSettlements([]);
+    }
+  };
 
   const fetchGroup = async () => {
     try {
@@ -287,6 +302,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       });
 
       await fetchExpenses();
+      await fetchSettlements();
       onExpenseAdded();
 
       alert(`Transaction successful!\nHash: ${txHash}`);
@@ -377,56 +393,137 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
             {/* Main Content */}
             <div className="gd-content-grid">
-              {/* Expense List */}
+              {/* Left: Tabbed History */}
               <section className="gd-expenses">
-                <div className="gd-expenses-header">
-                  <h2 className="text-headline-sm">Expense History</h2>
+                {/* Tab Headers */}
+                <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--color-zinc-200)", marginBottom: 16 }}>
+                  <button
+                    className="text-headline-sm"
+                    onClick={() => setActiveTab("expenses")}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      padding: "10px 20px", fontSize: 14, fontWeight: 600,
+                      color: activeTab === "expenses" ? "var(--color-primary)" : "var(--color-zinc-400)",
+                      borderBottom: activeTab === "expenses" ? "2px solid var(--color-primary)" : "2px solid transparent",
+                      marginBottom: -1,
+                    }}
+                  >
+                    Expense History
+                  </button>
+                  <button
+                    onClick={() => setActiveTab("transactions")}
+                    style={{
+                      background: "none", border: "none", cursor: "pointer",
+                      padding: "10px 20px", fontSize: 14, fontWeight: 600,
+                      color: activeTab === "transactions" ? "var(--color-primary)" : "var(--color-zinc-400)",
+                      borderBottom: activeTab === "transactions" ? "2px solid var(--color-primary)" : "2px solid transparent",
+                      marginBottom: -1,
+                    }}
+                  >
+                    Transaction History
+                  </button>
                 </div>
 
-                <div className="gd-expense-list">
-                  {expenses.length === 0 && (
-                    <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No expenses yet.</p>
-                  )}
-                  {expenses.map((exp) => (
-                    <div
-                      key={exp.id}
-                      className="gd-expense-row card card-p"
-                      onMouseEnter={() => setHoveredExpense(exp.id)}
-                      onMouseLeave={() => setHoveredExpense(null)}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                        <div className="gd-expense-icon">
-                          <span className="material-symbols-outlined" style={{ color: "var(--color-zinc-400)" }}>receipt_long</span>
+                {/* Expense Tab */}
+                {activeTab === "expenses" && (
+                  <div className="gd-expense-list">
+                    {expenses.length === 0 && (
+                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No expenses yet.</p>
+                    )}
+                    {expenses.map((exp) => (
+                      <div
+                        key={exp.id}
+                        className="gd-expense-row card card-p"
+                        onMouseEnter={() => setHoveredExpense(exp.id)}
+                        onMouseLeave={() => setHoveredExpense(null)}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                          <div className="gd-expense-icon">
+                            <span className="material-symbols-outlined" style={{ color: "var(--color-zinc-400)" }}>receipt_long</span>
+                          </div>
+                          <div>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                              Paid by <strong style={{ color: "#000" }}>{getMemberLabel(exp.paid_by)}</strong>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
-                          <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                            Paid by <strong style={{ color: "#000" }}>{getMemberLabel(exp.paid_by)}</strong>
-                          </p>
+                        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                          <div style={{ textAlign: "right" }}>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                              {exp.currency} {exp.amount.toLocaleString()}
+                            </p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                              {new Date(exp.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
+                            <button
+                              className="gd-expense-action-btn gd-action-delete"
+                              onClick={() => handleDeleteExpense(exp.id)}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-                        <div style={{ textAlign: "right" }}>
-                          <p className="text-headline-sm" style={{ fontSize: 15 }}>
-                            {exp.currency} {exp.amount.toLocaleString()}
-                          </p>
-                          <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
-                            {new Date(exp.created_at).toLocaleDateString()}
-                          </p>
+                {/* Transaction Tab */}
+                {activeTab === "transactions" && (
+                  <div className="gd-expense-list">
+                    {settlements.length === 0 && (
+                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No settlements yet.</p>
+                    )}
+                    {settlements.map((s) => {
+                      const isMe = s.from_user_id === userId;
+                      return (
+                        <div key={s.id} className="gd-expense-row card card-p">
+                          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                            <div className="gd-expense-icon">
+                              <span className="material-symbols-outlined" style={{ color: "var(--color-zinc-400)" }}>payments</span>
+                            </div>
+                            <div>
+                              <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                                {isMe ? "You" : getMemberLabel(s.from_user_id)}
+                                {" → "}
+                                {s.to_user_id === userId ? "You" : getMemberLabel(s.to_user_id)}
+                              </p>
+                              <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                                {s.tx_hash ? (
+                                  <a
+                                    href={`https://preprod.cardanoscan.io/transaction/${s.tx_hash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    style={{ color: "var(--color-primary)", fontSize: 11 }}
+                                  >
+                                    {s.tx_hash.slice(0, 16)}...
+                                  </a>
+                                ) : "No tx hash"}
+                              </p>
+                            </div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                              ADA {s.amount?.toLocaleString(undefined, { minimumFractionDigits: 2 }) ?? "—"}
+                            </p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                              {new Date(s.created_at).toLocaleDateString()}
+                            </p>
+                            <p style={{
+                              fontSize: 11, marginTop: 4,
+                              color: s.status === "confirmed" ? "var(--color-tertiary)" : "var(--color-zinc-400)"
+                            }}>
+                              {s.status === "confirmed" ? "Confirmed ✓" : "Pending..."}
+                            </p>
+                          </div>
                         </div>
-                        <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
-                          <button
-                            className="gd-expense-action-btn gd-action-delete"
-                            onClick={() => handleDeleteExpense(exp.id)}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                      );
+                    })}
+                  </div>
+                )}
               </section>
 
               {/* Side Panel */}
