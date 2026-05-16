@@ -7,10 +7,12 @@ interface Member {
   id?: string;
   user_id: string;
   stake_address?: string;
+  payment_address?: string;
   joined_at?: string;
   users?: {
     id?: string;
     stake_address?: string;
+    payment_address?: string;
     display_name?: string;
     email?: string;
   };
@@ -22,13 +24,23 @@ const shortAddr = (addr?: string, len = 12) =>
 const shortHash = (hash?: string) =>
   hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : "";
 
-const memberAddress = (m: Member): string =>
-  m.users?.stake_address || m.stake_address || "";
+const isPayableAddress = (addr?: string): addr is string =>
+  !!addr && (addr.startsWith("addr_") || addr.startsWith("addr1"));
+
+const memberAddress = (m: Member): string => {
+  const candidates = [
+    m.users?.payment_address,
+    m.payment_address,
+    m.users?.stake_address,
+    m.stake_address,
+  ];
+  return candidates.find(isPayableAddress) || "";
+};
 
 const memberDisplay = (m: Member): string =>
   m.users?.display_name ||
   m.users?.email ||
-  shortAddr(memberAddress(m)) ||
+  shortAddr(m.users?.payment_address || m.users?.stake_address || m.stake_address) ||
   (m.user_id ? m.user_id.slice(0, 8) : "Unknown");
 
 const explorerTxUrl = (hash: string) =>
