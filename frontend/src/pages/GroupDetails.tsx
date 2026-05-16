@@ -4,11 +4,47 @@ import { BlockfrostProvider, MeshTxBuilder } from "@meshsdk/core";
 import "./GroupDetails.css";
 
 interface Member {
-  id: string;
+  id?: string;
   user_id: string;
-  stake_address: string;
-  joined_at: string;
+  stake_address?: string;
+  payment_address?: string;
+  joined_at?: string;
+  users?: {
+    id?: string;
+    stake_address?: string;
+    payment_address?: string;
+    display_name?: string;
+    email?: string;
+  };
 }
+
+const shortAddr = (addr?: string, len = 12) =>
+  addr ? `${addr.slice(0, len)}…` : "";
+
+const shortHash = (hash?: string) =>
+  hash ? `${hash.slice(0, 8)}…${hash.slice(-6)}` : "";
+
+const isPayableAddress = (addr?: string): addr is string =>
+  !!addr && (addr.startsWith("addr_") || addr.startsWith("addr1"));
+
+const memberAddress = (m: Member): string => {
+  const candidates = [
+    m.users?.payment_address,
+    m.payment_address,
+    m.users?.stake_address,
+    m.stake_address,
+  ];
+  return candidates.find(isPayableAddress) || "";
+};
+
+const memberDisplay = (m: Member): string =>
+  m.users?.display_name ||
+  m.users?.email ||
+  shortAddr(m.users?.payment_address || m.users?.stake_address || m.stake_address) ||
+  (m.user_id ? m.user_id.slice(0, 8) : "Unknown");
+
+const explorerTxUrl = (hash: string) =>
+  `https://preview.cardanoscan.io/transaction/${hash}`;
 
 interface Expense {
   id: string;
@@ -51,6 +87,8 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [hoveredExpense, setHoveredExpense] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"expenses" | "transactions">("expenses");
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
 
   // Settle Up Modal
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
@@ -233,6 +271,47 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     balanceMap[m.user_id] = -theirNet;
   });
 
+  const memberById = (uid: string) =>
+    group.group_members?.find((m) => m.user_id === uid);
+
+  const payerLabel = (uid: string) => {
+    if (uid === userId) return "You";
+    const m = memberById(uid);
+    return m ? memberDisplay(m) : uid.slice(0, 8);
+  };
+
+  const owedMembers = (group.group_members ?? []).filter(
+    (m) => m.user_id !== userId && (balanceMap[m.user_id] ?? 0) < 0,
+  );
+
+  const settledExpenses = expenses.filter(
+    (e) => e.tx_status === "settled" && e.tx_hash,
+  );
+
+  const closeSettleUp = () => {
+    setShowSettleUpModal(false);
+    setSettleUpMemberId("");
+    setSettleUpAddress("");
+    setSettleUpAmount("");
+  };
+
+  const selectSettleMember = (m: Member) => {
+    const balance = balanceMap[m.user_id] ?? 0;
+    setSettleUpMemberId(m.user_id);
+    setSettleUpAddress(memberAddress(m));
+    setSettleUpAmount(Math.abs(balance).toFixed(2));
+  };
+
+  const copyHash = async (hash: string) => {
+    try {
+      await navigator.clipboard.writeText(hash);
+      setCopiedHash(hash);
+      setTimeout(() => setCopiedHash((c) => (c === hash ? null : c)), 1500);
+    } catch {
+      /* clipboard unavailable */
+    }
+  };
+
   const submitSettleUp = async () => {
     if (!wallet) {
       alert("Wallet not available. Please refresh and try again.");
@@ -365,57 +444,190 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
             {/* Main Content */}
             <div className="gd-content-grid">
-              {/* Expense List */}
+              {/* Expense / Transaction tabs */}
               <section className="gd-expenses">
-                <div className="gd-expenses-header">
-                  <h2 className="text-headline-sm">Expense History</h2>
+                <div
+                  role="tablist"
+                  style={{
+                    display: "flex",
+                    gap: 0,
+                    borderBottom: "1px solid var(--color-zinc-200)",
+                    marginBottom: 16,
+                  }}
+                >
+                  {([
+                    ["expenses", "Expense History"],
+                    ["transactions", "Transaction History"],
+                  ] as const).map(([key, label]) => {
+                    const isActive = activeTab === key;
+                    return (
+                      <button
+                        key={key}
+                        role="tab"
+                        aria-selected={isActive}
+                        onClick={() => setActiveTab(key)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          padding: "10px 20px",
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: isActive ? "var(--color-primary)" : "var(--color-zinc-400)",
+                          borderBottom: isActive
+                            ? "2px solid var(--color-primary)"
+                            : "2px solid transparent",
+                          marginBottom: -1,
+                        }}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                <div className="gd-expense-list">
-                  {expenses.length === 0 && (
-                    <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No expenses yet.</p>
-                  )}
-                  {expenses.map((exp) => (
-                    <div
-                      key={exp.id}
-                      className="gd-expense-row card card-p"
-                      onMouseEnter={() => setHoveredExpense(exp.id)}
-                      onMouseLeave={() => setHoveredExpense(null)}
-                    >
-                      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                        <div className="gd-expense-icon">
-                          <span className="material-symbols-outlined" style={{ color: "var(--color-zinc-400)" }}>receipt_long</span>
+                {activeTab === "expenses" && (
+                  <div className="gd-expense-list">
+                    {expenses.length === 0 && (
+                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No expenses yet.</p>
+                    )}
+                    {expenses.map((exp) => (
+                      <div
+                        key={exp.id}
+                        className="gd-expense-row card card-p"
+                        onMouseEnter={() => setHoveredExpense(exp.id)}
+                        onMouseLeave={() => setHoveredExpense(null)}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                          <div className="gd-expense-icon">
+                            <span className="material-symbols-outlined" style={{ color: "var(--color-zinc-400)" }}>receipt_long</span>
+                          </div>
+                          <div>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                              Paid by <strong style={{ color: "#000" }}>{payerLabel(exp.paid_by)}</strong>
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  marginLeft: 10,
+                                  padding: "2px 8px",
+                                  borderRadius: 6,
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.04em",
+                                  background: exp.tx_status === "settled"
+                                    ? "var(--color-tertiary-light)"
+                                    : "#fef9c3",
+                                  color: exp.tx_status === "settled"
+                                    ? "var(--color-tertiary)"
+                                    : "#a16207",
+                                }}
+                              >
+                                {exp.tx_status}
+                              </span>
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
-                          <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                            Paid by <strong style={{ color: "#000" }}>{exp.paid_by}</strong>
-                            <span
-                              style={{
-                                display: "inline-block",
-                                marginLeft: 10,
-                                padding: "2px 8px",
-                                borderRadius: 6,
-                                fontSize: 10,
-                                fontWeight: 600,
-                                textTransform: "uppercase",
-                                letterSpacing: "0.04em",
-                                background: exp.tx_status === "settled"
-                                  ? "var(--color-tertiary-light)"
-                                  : "#fef9c3",
-                                color: exp.tx_status === "settled"
-                                  ? "var(--color-tertiary)"
-                                  : "#a16207",
-                              }}
+
+                        <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
+                          <div style={{ textAlign: "right" }}>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                              {exp.currency} {exp.amount.toLocaleString()}
+                            </p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                              {new Date(exp.created_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
+                            <button className="gd-expense-action-btn gd-action-edit">
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
+                            </button>
+                            <button
+                              className="gd-expense-action-btn gd-action-delete"
+                              onClick={() => handleDeleteExpense(exp.id)}
                             >
-                              {exp.tx_status}
-                            </span>
-                          </p>
+                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
+                    ))}
+                  </div>
+                )}
 
-                      <div style={{ display: "flex", alignItems: "center", gap: 32 }}>
-                        <div style={{ textAlign: "right" }}>
+                {activeTab === "transactions" && (
+                  <div className="gd-expense-list">
+                    {settledExpenses.length === 0 && (
+                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>
+                        No settled transactions yet.
+                      </p>
+                    )}
+                    {settledExpenses.map((exp) => (
+                      <div key={exp.id} className="gd-expense-row card card-p">
+                        <div style={{ display: "flex", alignItems: "center", gap: 20, minWidth: 0, flex: 1 }}>
+                          <div className="gd-expense-icon">
+                            <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)" }}>
+                              check_circle
+                            </span>
+                          </div>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
+                            <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                              Paid by <strong style={{ color: "#000" }}>{payerLabel(exp.paid_by)}</strong>
+                            </p>
+                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                              <code
+                                style={{
+                                  fontSize: 11,
+                                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+                                  background: "var(--color-zinc-100)",
+                                  padding: "2px 6px",
+                                  borderRadius: 4,
+                                  color: "var(--color-zinc-700)",
+                                }}
+                                title={exp.tx_hash ?? ""}
+                              >
+                                {shortHash(exp.tx_hash ?? "")}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => exp.tx_hash && copyHash(exp.tx_hash)}
+                                title="Copy tx hash"
+                                style={{
+                                  background: "none",
+                                  border: "none",
+                                  cursor: "pointer",
+                                  padding: 2,
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  color: copiedHash === exp.tx_hash ? "var(--color-tertiary)" : "var(--color-zinc-500)",
+                                }}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                                  {copiedHash === exp.tx_hash ? "check" : "content_copy"}
+                                </span>
+                              </button>
+                              {exp.tx_hash && (
+                                <a
+                                  href={explorerTxUrl(exp.tx_hash)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  title="View on Cardanoscan"
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    color: "var(--color-zinc-500)",
+                                  }}
+                                >
+                                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ textAlign: "right", marginLeft: 16 }}>
                           <p className="text-headline-sm" style={{ fontSize: 15 }}>
                             {exp.currency} {exp.amount.toLocaleString()}
                           </p>
@@ -423,21 +635,10 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                             {new Date(exp.created_at).toLocaleDateString()}
                           </p>
                         </div>
-                        <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
-                          <button className="gd-expense-action-btn gd-action-edit">
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
-                          </button>
-                          <button
-                            className="gd-expense-action-btn gd-action-delete"
-                            onClick={() => handleDeleteExpense(exp.id)}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
-                          </button>
-                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </section>
 
               {/* Side Panel */}
@@ -479,7 +680,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                             </div>
                             <div>
                               <p className="text-label-md" style={{ lineHeight: 1 }}>
-                                {isYou ? "You" : m.stake_address?.slice(0, 12) + "..."}
+                                {isYou ? "You" : memberDisplay(m)}
                               </p>
                               <p style={{ fontSize: 10, color: "var(--color-zinc-400)", marginTop: 4 }}>
                                 {m.user_id === group.created_by ? "Creator" : "Member"}
@@ -568,7 +769,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 >
                   {group.group_members?.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
-                      {m.user_id === userId ? "You" : m.stake_address?.slice(0, 12) + "..."}
+                      {m.user_id === userId ? "You" : memberDisplay(m)}
                     </option>
                   ))}
                 </select>
@@ -662,7 +863,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   <span className="material-symbols-outlined" style={{ color: "var(--color-error)", fontSize: 22 }}>person_remove</span>
                 </div>
                 <p className="text-body-md">
-                  Remove <strong>{memberToDeleteObj?.stake_address?.slice(0, 12)}...</strong> from this group?
+                  Remove <strong>{memberToDeleteObj ? memberDisplay(memberToDeleteObj) : "this member"}</strong> from this group?
                 </p>
               </div>
             </div>
@@ -678,104 +879,119 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
       {/* Settle Up Modal */}
       {showSettleUpModal && (
-        <div className="modal-backdrop" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
+        <div className="modal-backdrop" onClick={closeSettleUp}>
           <div className="modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <h2 className="text-headline-sm">Settle Up via Cardano</h2>
-              <button className="modal-close-btn" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }}>
+              <button className="modal-close-btn" onClick={closeSettleUp}>
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div className="modal-body">
-              <p className="text-body-md" style={{ marginBottom: "16px", color: "var(--color-zinc-500)" }}>
-                Send ADA directly to settle your balance with a group member.
+              <p className="text-body-md" style={{ marginBottom: 16, color: "var(--color-zinc-500)" }}>
+                Tap a member you owe — the recipient address and amount are filled in for you.
               </p>
 
-              <div className="modal-field">
-                <label className="modal-label">Member to Settle With</label>
-                <select
-                  className="modal-input"
-                  value={settleUpMemberId}
-                  onChange={(e) => {
-                    setSettleUpMemberId(e.target.value);
-                    const balance = balanceMap[e.target.value] || 0;
-                    if (balance < 0) {
-                      setSettleUpAmount(Math.abs(balance).toFixed(2));
-                    } else {
-                      setSettleUpAmount("");
-                    }
-                  }}
-                >
-                  <option value="">-- Select a member --</option>
-                  {group.group_members
-                    ?.filter((m) => m.user_id !== userId)
-                    .map((m) => {
-                      const balance = balanceMap[m.user_id] || 0;
-                      const label = balance < 0
-                        ? `You owe ${Math.abs(balance).toFixed(2)} ADA`
-                        : balance > 0
-                        ? `Owes you ${balance.toFixed(2)} ADA`
-                        : "Settled";
-                      const shortAddr = m.stake_address?.slice(0, 12) || m.user_id?.slice(0, 8);
-                      return (
-                        <option key={m.user_id} value={m.user_id}>
-                          {shortAddr} — {label}
-                        </option>
-                      );
-                    })}
-                </select>
-              </div>
-
-              {settleUpMemberId && (
+              {owedMembers.length === 0 ? (
                 <div style={{
-                  marginTop: 12,
-                  padding: "12px 16px",
+                  padding: "24px 16px",
+                  textAlign: "center",
                   borderRadius: 10,
-                  background: balanceMap[settleUpMemberId] < 0
-                    ? "var(--color-error-light)"
-                    : "var(--color-tertiary-light)",
-                  fontSize: 13,
-                  color: balanceMap[settleUpMemberId] < 0 ? "var(--color-error)" : "var(--color-tertiary)",
+                  background: "var(--color-tertiary-light)",
+                  color: "var(--color-tertiary)",
+                  fontSize: 14,
                 }}>
-                  {balanceMap[settleUpMemberId] < 0
-                    ? `You owe this member ADA ${Math.abs(balanceMap[settleUpMemberId]).toFixed(2)}`
-                    : balanceMap[settleUpMemberId] > 0
-                    ? `This member owes you ADA ${balanceMap[settleUpMemberId].toFixed(2)}`
-                    : "No outstanding balance"}
+                  <span className="material-symbols-outlined" style={{ fontSize: 28, display: "block", marginBottom: 6 }}>
+                    check_circle
+                  </span>
+                  You don't owe anyone in this group.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {owedMembers.map((m) => {
+                    const amount = Math.abs(balanceMap[m.user_id] ?? 0);
+                    const addr = memberAddress(m);
+                    const isSelected = settleUpMemberId === m.user_id;
+                    return (
+                      <button
+                        key={m.user_id}
+                        type="button"
+                        onClick={() => selectSettleMember(m)}
+                        disabled={!addr}
+                        style={{
+                          textAlign: "left",
+                          width: "100%",
+                          padding: "12px 14px",
+                          borderRadius: 10,
+                          border: isSelected
+                            ? "2px solid var(--color-primary)"
+                            : "1px solid var(--color-zinc-200)",
+                          background: isSelected ? "var(--color-primary-light, #f5f3ff)" : "#fff",
+                          cursor: addr ? "pointer" : "not-allowed",
+                          opacity: addr ? 1 : 0.5,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 12,
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                          <div className="cg-member-avatar-placeholder">
+                            <span className="material-symbols-outlined" style={{ fontSize: 20 }}>person</span>
+                          </div>
+                          <div style={{ minWidth: 0 }}>
+                            <p className="text-label-md" style={{ lineHeight: 1.2 }}>
+                              {memberDisplay(m)}
+                            </p>
+                            <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 4, fontFamily: "ui-monospace, monospace" }}>
+                              {addr ? shortAddr(addr, 16) : "No wallet address on file"}
+                            </p>
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                          <p className="text-headline-sm" style={{ fontSize: 14, color: "var(--color-error)" }}>
+                            ADA {amount.toFixed(2)}
+                          </p>
+                          <p style={{ fontSize: 10, color: "var(--color-zinc-400)", marginTop: 2 }}>
+                            You owe
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
 
-              <div className="modal-field">
-                <label className="modal-label">Recipient Wallet Address</label>
-                <input
-                  className="modal-input"
-                  type="text"
-                  placeholder="addr_test1..."
-                  value={settleUpAddress}
-                  onChange={(e) => setSettleUpAddress(e.target.value)}
-                />
-              </div>
-
-              <div className="modal-field">
-                <label className="modal-label">Amount (ADA)</label>
-                <input
-                  className="modal-input"
-                  type="number"
-                  min="0"
-                  step="0.000001"
-                  placeholder="e.g. 5.5"
-                  value={settleUpAmount}
-                  onChange={(e) => setSettleUpAmount(e.target.value)}
-                />
-              </div>
+              {settleUpMemberId && settleUpAddress && (
+                <div style={{
+                  marginTop: 16,
+                  padding: "14px 16px",
+                  borderRadius: 10,
+                  background: "var(--color-zinc-50, #fafafa)",
+                  border: "1px solid var(--color-zinc-200)",
+                  fontSize: 13,
+                  color: "var(--color-zinc-700)",
+                }}>
+                  <p style={{ marginBottom: 4 }}>
+                    Paying <strong>{payerLabel(settleUpMemberId)}</strong> <strong>{settleUpAmount} ADA</strong>
+                  </p>
+                  <p style={{ fontSize: 11, fontFamily: "ui-monospace, monospace", color: "var(--color-zinc-500)", wordBreak: "break-all" }}>
+                    → {settleUpAddress}
+                  </p>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setShowSettleUpModal(false); setSettleUpMemberId(""); }} disabled={isSubmitting}>
+              <button className="btn btn-secondary" onClick={closeSettleUp} disabled={isSubmitting}>
                 Cancel
               </button>
-              <button className="btn btn-dark" onClick={submitSettleUp} disabled={isSubmitting || !settleUpMemberId}>
+              <button
+                className="btn btn-dark"
+                onClick={submitSettleUp}
+                disabled={isSubmitting || !settleUpMemberId || !settleUpAddress || !settleUpAmount}
+              >
                 {isSubmitting ? "Processing..." : "Sign & Send"}
               </button>
             </div>

@@ -40,6 +40,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       const stakeAddress = rewardAddresses[0];
       if (!stakeAddress) throw new Error("No stake address found");
 
+      const paymentAddress = await wallet.getChangeAddressBech32();
+
       const nonceRes = await fetch("/api/auth/nonce", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -56,6 +58,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
         body: JSON.stringify({
           stake_address: stakeAddress,
           signed_message: JSON.stringify(signedMessage),
+          payment_address: paymentAddress,
         }),
       });
       if (!verifyRes.ok) throw new Error("Failed to verify signature");

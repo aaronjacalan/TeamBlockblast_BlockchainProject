@@ -82,7 +82,7 @@ def get_all_groups(user_id: str):
 def get_group(group_id: str):
     result = (
         supabase.table("groups")
-        .select("*, group_members(user_id, joined_at, users(id, stake_address))")
+        .select("*, group_members(user_id, joined_at, users(id, stake_address, payment_address, display_name, email))")
         .eq("id", group_id)
         .single()
         .execute()

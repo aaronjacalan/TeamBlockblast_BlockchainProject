@@ -15,6 +15,7 @@ class NonceRequest(BaseModel):
 class VerifyRequest(BaseModel):
     stake_address: str
     signed_message: str
+    payment_address: Optional[str] = None
 
 
 class UpdateProfile(BaseModel):
@@ -79,18 +80,28 @@ def verify_signature(data: VerifyRequest):
     if datetime.now(timezone.utc) > expires_at:
         raise HTTPException(status_code=400, detail="Nonce expired, request a new one")
 
-    supabase.table("users").update({
+    update_fields = {
         "auth_nonce": None,
-        "nonce_expires_at": None
-    }).eq("stake_address", stake_address).execute()
+        "nonce_expires_at": None,
+    }
+    payment_address = (data.payment_address or "").strip()
+    if payment_address:
+        update_fields["payment_address"] = payment_address
+
+    updated = supabase.table("users").update(update_fields) \
+        .eq("stake_address", stake_address) \
+        .execute()
+
+    refreshed = updated.data[0] if updated.data else user
 
     return {
-    "user": {
-        "id": user["id"],
-        "stake_address": user["stake_address"]
-    },
-    "message": "Welcome back!"
-}
+        "user": {
+            "id": refreshed["id"],
+            "stake_address": refreshed.get("stake_address", user["stake_address"]),
+            "payment_address": refreshed.get("payment_address"),
+        },
+        "message": "Welcome back!",
+    }
     
 
 @router.put("/profile")
