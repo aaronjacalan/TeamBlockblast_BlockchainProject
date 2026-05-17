@@ -165,11 +165,6 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
               <div className="card cg-card">
                 {/* Group Identity */}
                 <div className="cg-identity">
-                  <div className="cg-photo-upload">
-                    <span className="material-symbols-outlined" style={{ fontSize: 28, color: "var(--color-zinc-400)" }}>
-                      add_a_photo
-                    </span>
-                  </div>
                   <div className="cg-name-field">
                     <label className="cg-label">GROUP NAME</label>
                     <input

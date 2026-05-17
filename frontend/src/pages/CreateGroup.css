@@ -137,8 +137,8 @@
 /* ── Identity ─────────────────────────────────────────────────────────────── */
 .cg-identity {
   display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 24px;
+  grid-template-columns: 1fr;
+  gap: 0;
   align-items: start;
 }
 
@@ -148,21 +148,6 @@
   }
 }
 
-.cg-photo-upload {
-  aspect-ratio: 1;
-  background: var(--color-zinc-100);
-  border: 2px dashed var(--color-zinc-300);
-  border-radius: var(--radius-xl);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: border-color 0.2s;
-}
-
-.cg-photo-upload:hover {
-  border-color: var(--color-tertiary);
-}
 
 .cg-name-field {
   display: flex;

@@ -204,23 +204,6 @@
   align-items: flex-start;
 }
 
-.db-group-icon {
-  width: 44px;
-  height: 44px;
-  background: var(--color-zinc-100);
-  border-radius: var(--radius-md);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--color-zinc-600);
-  transition: all 0.2s;
-}
-
-.db-group-card:hover .db-group-icon {
-  background: #000;
-  color: #fff;
-}
-
 .db-group-card-footer {
   display: flex;
   justify-content: space-between;

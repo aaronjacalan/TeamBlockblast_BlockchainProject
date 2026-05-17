@@ -387,13 +387,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
             {/* Group Header */}
             <div className="gd-header">
               <div className="gd-header-left">
-                <div className="gd-group-avatar">
-                  {group.image_url ? (
-                    <img src={group.image_url} alt={group.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    <span className="material-symbols-outlined" style={{ fontSize: 32, color: "var(--color-zinc-400)" }}>group</span>
-                  )}
-                </div>
                 <div>
                   <h1 className="text-headline-lg">{group.name}</h1>
                   <p style={{ color: "var(--color-zinc-500)", fontSize: 14, marginTop: 4 }}>
