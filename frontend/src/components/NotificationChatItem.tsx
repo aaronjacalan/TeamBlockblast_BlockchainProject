@@ -8,6 +8,19 @@ interface NotificationChatItemProps {
   footer?: React.ReactNode;
 }
 
+const handleInviteResponse = async (
+  notificationId: string,
+  groupId: string,
+  action: "accept" | "reject"
+) => {
+  await fetch(`/api/groups/${groupId}/invite/respond`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ user_id: currentUserId, action }),
+  });
+  fetchNotifications();
+};
+
 const NotificationChatItem: React.FC<NotificationChatItemProps> = ({
   message,
   time,

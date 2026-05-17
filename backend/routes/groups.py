@@ -4,6 +4,7 @@ from typing import Optional
 from database import supabase
 import secrets
 from datetime import datetime, timedelta, timezone
+from routes.utils import recalculate_splits_for_group
 
 router = APIRouter()
 
@@ -127,37 +128,6 @@ def create_group(data: GroupCreate):
 
     return group
 
-# @router.put("/{group_id}")
-# def update_group(group_id: str, data: GroupUpdate):
-#     if not data.requester_id.strip():
-#         raise HTTPException(status_code=400, detail="requester_id is required")
-
-#     group_result = supabase.table("groups").select("created_by, name").eq("id", group_id).execute()
-#     if not group_result.data:
-#         raise HTTPException(status_code=404, detail="Group not found")
-
-#     if group_result.data[0]["created_by"] != data.requester_id:
-#         raise HTTPException(status_code=403, detail="Not authorized to update this group")
-
-#     update_data = {}
-#     if data.name is not None:
-#         if not data.name.strip():
-#             raise HTTPException(status_code=400, detail="Group name is required")
-#         update_data["name"] = data.name.strip()
-#     if data.description is not None:
-#         update_data["description"] = data.description
-
-#     if not update_data:
-#         raise HTTPException(status_code=400, detail="No updates provided")
-
-#     update_result = supabase.table("groups").update(update_data).eq("id", group_id).execute()
-#     updated_group = update_result.data[0] if update_result.data else None
-
-#     if updated_group:
-#         log_activity(data.requester_id, group_id, "group_updated", f"Updated group \"{updated_group.get('name', '')}\"")
-
-#     return updated_group
-
 
 @router.post("/{group_id}/join")
 def join_group(group_id: str, invite_code: str, user_id: str):
@@ -249,7 +219,7 @@ def remove_member(group_id: str, user_id: str, requester_id: str):
         raise HTTPException(status_code=403, detail="Not authorized to remove this member")
 
     supabase.table("group_members").delete().eq("group_id", group_id).eq("user_id", user_id).execute()
-
+    recalculate_splits_for_group(group_id)  
     # log activity
     log_activity(requester_id, group_id, "member_removed", f"Removed a member from the group")
 
@@ -308,3 +278,71 @@ def invite_by_email(group_id: str, data: InviteByEmail):
     }).execute()
 
     return {"message": "Invite sent successfully"}
+
+
+class InviteResponse(BaseModel):
+    user_id: str
+    action: str  # "accept" or "reject"
+
+
+@router.patch("/{group_id}/invite/respond")
+def respond_to_invite(group_id: str, data: InviteResponse):
+    if data.action not in ("accept", "reject"):
+        raise HTTPException(status_code=400, detail="Invalid action")
+
+    # find the pending invite notification
+    notif_result = (
+        supabase.table("notifications")
+        .select("*")
+        .eq("user_id", data.user_id)
+        .eq("type", "group_invite")
+        .eq("metadata->>group_id", group_id)
+        .single()
+        .execute()
+    )
+    if not notif_result.data:
+        raise HTTPException(status_code=404, detail="Invite not found")
+
+    notif = notif_result.data
+    invited_by = notif["metadata"]["invited_by"]
+
+    if data.action == "accept":
+        # check not already a member
+        existing = (
+            supabase.table("group_members")
+            .select("id")
+            .eq("group_id", group_id)
+            .eq("user_id", data.user_id)
+            .execute()
+        )
+        if not existing.data:
+            supabase.table("group_members").insert({
+                "group_id": group_id,
+                "user_id": data.user_id,
+            }).execute()
+            log_activity(data.user_id, group_id, "member_joined", "Joined the group via invite")
+            recalculate_splits_for_group(group_id)  
+
+    # delete the invite notification from invitee's feed
+    supabase.table("notifications").delete().eq("id", notif["id"]).execute()
+
+    # notify the inviter of the response
+    group_result = supabase.table("groups").select("name").eq("id", group_id).single().execute()
+    invitee_result = supabase.table("users").select("display_name, email").eq("id", data.user_id).single().execute()
+
+    group_name = group_result.data.get("name", "the group")
+    invitee_label = invitee_result.data.get("display_name") or invitee_result.data.get("email") or "Someone"
+    verb = "accepted" if data.action == "accept" else "declined"
+
+    supabase.table("notifications").insert({
+        "user_id": invited_by,
+        "type": "invite_response",
+        "title": f"Invite {verb}",
+        "message": f"{invitee_label} {verb} your invite to \"{group_name}\".",
+        "metadata": {
+            "group_id": group_id,
+            "action": data.action,
+        },
+    }).execute()
+
+    return {"message": f"Invite {verb}"}
