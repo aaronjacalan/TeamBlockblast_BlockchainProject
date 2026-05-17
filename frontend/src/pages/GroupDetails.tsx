@@ -308,10 +308,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     (m) => m.user_id !== userId && (balanceMap[m.user_id] ?? 0) < 0,
   );
 
-  const settledExpenses = expenses.filter(
-    (e) => e.tx_status === "settled" && e.tx_hash,
-  );
-
   const closeSettleUp = () => {
     setShowSettleUpModal(false);
     setSettleUpMemberId("");
@@ -567,67 +563,74 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   </div>
                 )}
 
-                {settlements.map((s) => (
-                <div key={s.id} className="gd-expense-row card card-p">
-                  <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-                    <div className="gd-expense-icon" style={{ background: "var(--color-tertiary-light, #f0fdf4)" }}>
-                      <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)" }}>
-                        check_circle
-                      </span>
-                    </div>
-                    <div>
-                      <p className="text-headline-sm" style={{ fontSize: 15 }}>
-                        {s.from_user_id === userId ? "You" : s.from_user?.display_name || s.from_user?.email || "Someone"}
-                        {" → "}
-                        {s.to_user_id === userId ? "You" : s.to_user?.display_name || s.to_user?.email || "Someone"}
-                      </p>
-                      <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                        Paid by <strong style={{ color: "#000" }}>
-                          {s.from_user === userId ? "You" : s.from_user_data?.display_name || s.from_user_data?.email || "Someone"}
-                        </strong>
-                      </p>
-                      {/* hash on the left */}
-                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
-                        <code style={{
-                          fontSize: 11,
-                          fontFamily: "ui-monospace, monospace",
-                          background: "var(--color-zinc-100)",
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          color: "var(--color-zinc-700)",
-                        }}>
-                          {shortHash(s.tx_hash)}
-                        </code>
-                        <button
-                          onClick={() => copyHash(s.tx_hash)}
-                          style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "inline-flex", alignItems: "center", color: copiedHash === s.tx_hash ? "var(--color-tertiary)" : "var(--color-zinc-500)" }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                            {copiedHash === s.tx_hash ? "check" : "content_copy"}
+                {activeTab === "transactions" && (
+                  <div className="gd-expense-list">
+                    {settlements.length === 0 && (
+                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>No transactions yet.</p>
+                    )}
+                    {settlements.map((s) => (
+                    <div key={s.id} className="gd-expense-row card card-p">
+                      <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                        <div className="gd-expense-icon" style={{ background: "var(--color-tertiary-light, #f0fdf4)" }}>
+                          <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)" }}>
+                            check_circle
                           </span>
-                        </button>
-                        <a
-                          href={explorerTxUrl(s.tx_hash)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{ display: "inline-flex", alignItems: "center", color: "var(--color-zinc-500)" }}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
-                        </a>
+                        </div>
+                        <div>
+                          <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                            {s.from_user_id === userId ? "You" : s.from_user?.display_name || s.from_user?.email || "Someone"}
+                            {" → "}
+                            {s.to_user_id === userId ? "You" : s.to_user?.display_name || s.to_user?.email || "Someone"}
+                          </p>
+                          <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                            Paid by <strong style={{ color: "#000" }}>
+                              {s.from_user === userId ? "You" : s.from_user_data?.display_name || s.from_user_data?.email || "Someone"}
+                            </strong>
+                          </p>
+                          {/* hash on the left */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
+                            <code style={{
+                              fontSize: 11,
+                              fontFamily: "ui-monospace, monospace",
+                              background: "var(--color-zinc-100)",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                              color: "var(--color-zinc-700)",
+                            }}>
+                              {shortHash(s.tx_hash)}
+                            </code>
+                            <button
+                              onClick={() => copyHash(s.tx_hash)}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "inline-flex", alignItems: "center", color: copiedHash === s.tx_hash ? "var(--color-tertiary)" : "var(--color-zinc-500)" }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                                {copiedHash === s.tx_hash ? "check" : "content_copy"}
+                              </span>
+                            </button>
+                            <a
+                              href={explorerTxUrl(s.tx_hash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{ display: "inline-flex", alignItems: "center", color: "var(--color-zinc-500)" }}
+                            >
+                              <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ textAlign: "right" }}>
+                        <p className="text-headline-sm" style={{ fontSize: 15, color: "var(--color-tertiary)" }}>
+                          ADA {s.amount.toFixed(2)}
+                        </p>
+                        <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                          {new Date(s.initiated_at).toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
+                  ))}
                   </div>
-
-                  <div style={{ textAlign: "right" }}>
-                    <p className="text-headline-sm" style={{ fontSize: 15, color: "var(--color-tertiary)" }}>
-                      ADA {s.amount.toFixed(2)}
-                    </p>
-                    <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
-                      {new Date(s.initiated_at).toLocaleDateString()}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                )}
               </section>
               
               {/* Side Panel */}
