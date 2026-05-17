@@ -68,11 +68,6 @@ const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups })
                   onClick={() => onSelectGroup(g.id)}
                 >
                   <div className="groups-card-top">
-                    <div className="groups-card-icon">
-                      <span className="material-symbols-outlined" style={{ fontSize: 28 }}>
-                        {g.image_url || "group"}
-                      </span>
-                    </div>
                     <span className="badge badge-purple">Active</span>
                   </div>
                   <h3 className="text-headline-sm groups-card-title">{g.name}</h3>

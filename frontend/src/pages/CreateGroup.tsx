@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import "./CreateGroup.css";
 import { groupMembers } from "../data";
 
@@ -14,6 +14,13 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const [members, setMembers] = useState(groupMembers);
   const [hoveredMember, setHoveredMember] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);  // added
+  const [hasPaid, setHasPaid] = useState(false);
+  const [nameError, setNameError] = useState(false);
+  const [descriptionError, setDescriptionError] = useState(false);
+  const [paymentError, setPaymentError] = useState(false);
+  const nameErrorTimer = useRef<number | null>(null);
+  const descriptionErrorTimer = useRef<number | null>(null);
+  const paymentErrorTimer = useRef<number | null>(null);
 
   // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
@@ -86,7 +93,28 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   };
 
   const handleCreate = async () => {
-    if (!groupName.trim()) return;
+    const nameMissing = !groupName.trim();
+    const descriptionMissing = !groupDescription.trim();
+
+    if (nameMissing) {
+      setNameError(true);
+      if (nameErrorTimer.current) window.clearTimeout(nameErrorTimer.current);
+      nameErrorTimer.current = window.setTimeout(() => setNameError(false), 5000);
+    }
+
+    if (descriptionMissing) {
+      setDescriptionError(true);
+      if (descriptionErrorTimer.current) window.clearTimeout(descriptionErrorTimer.current);
+      descriptionErrorTimer.current = window.setTimeout(() => setDescriptionError(false), 5000);
+    }
+
+    if (nameMissing || descriptionMissing) return;
+    if (!hasPaid) {
+      setPaymentError(true);
+      if (paymentErrorTimer.current) window.clearTimeout(paymentErrorTimer.current);
+      paymentErrorTimer.current = window.setTimeout(() => setPaymentError(false), 5000);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -137,15 +165,10 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
               <div className="card cg-card">
                 {/* Group Identity */}
                 <div className="cg-identity">
-                  <div className="cg-photo-upload">
-                    <span className="material-symbols-outlined" style={{ fontSize: 28, color: "var(--color-zinc-400)" }}>
-                      add_a_photo
-                    </span>
-                  </div>
                   <div className="cg-name-field">
                     <label className="cg-label">GROUP NAME</label>
                     <input
-                      className="cg-name-input"
+                      className={`cg-name-input${nameError ? " cg-error" : ""}`}
                       type="text"
                       placeholder="e.g. Summer Trip 2024"
                       value={groupName}
@@ -162,7 +185,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
                     </span>
                   </div>
                   <textarea
-                    className="cg-desc-input"
+                    className={`cg-desc-input${descriptionError ? " cg-error" : ""}`}
                     placeholder="Add a quick note for your group..."
                     value={groupDescription}
                     onChange={(e) => handleDescriptionChange(e.target.value)}
@@ -171,7 +194,17 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
                 </div>
 
                 <div className="cg-cta">
-                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading}>
+                  <button
+                    className={`cg-pay-btn${hasPaid ? " paid" : ""}${paymentError ? " cg-error" : ""}`}
+                    onClick={() => {
+                      setHasPaid(true);
+                      setPaymentError(false);
+                    }}
+                    disabled={hasPaid}
+                  >
+                    {hasPaid ? "Paid 1 ADA" : "Pay 1 ADA"}
+                  </button>
+                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading || !hasPaid}>
                     {loading ? "Creating..." : "Create Group"}
                   </button>
                 </div>

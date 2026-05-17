@@ -114,9 +114,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSele
                   onClick={() => onSelectGroup(g.id)}
                 >
                   <div className="db-group-card-top">
-                    <div className="db-group-icon">
-                      <span className="material-symbols-outlined">{g.image_url || "group"}</span>
-                    </div>
                     <span className="badge badge-purple">Active</span>
                   </div>
                   <h4 className="text-headline-sm" style={{ marginTop: 20 }}>
