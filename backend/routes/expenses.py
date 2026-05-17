@@ -89,53 +89,102 @@ class SettleRequest(BaseModel):
     tx_hash: str
 
 
+@router.get("/settlements")
+def get_settlements(group_id: str):
+    result = (
+        supabase.table("settlements")
+        .select("*, from_user:users!settlements_from_user_fkey(display_name, email, stake_address), to_user:users!settlements_to_user_fkey(display_name, email, stake_address)")
+        .eq("group_id", group_id)
+        .order("initiated_at", desc=True)
+        .execute()
+    )
+    return result.data
+
+
 @router.patch("/settle")
 def settle_splits(data: SettleRequest):
-    # find all expenses in this group where to_user paid and from_user owes
+    print("=== SETTLE REQUEST ===")
+    print(f"group_id: {data.group_id}")
+    print(f"from_user_id: {data.from_user_id}")
+    print(f"to_user_id: {data.to_user_id}")
+    print(f"tx_hash: {data.tx_hash}")
+
     expenses_result = (
         supabase.table("expenses")
-        .select("id")
+        .select("id, amount")
         .eq("group_id", data.group_id)
         .eq("paid_by", data.to_user_id)
         .execute()
     )
+    print(f"expenses found: {expenses_result.data}")
+
     if not expenses_result.data:
+        print("NO EXPENSES FOUND - returning early")
         return {"message": "No expenses to settle", "settled": 0}
 
     expense_ids = [e["id"] for e in expenses_result.data]
     settled_count = 0
+    total_amount = 0.0
 
     for expense_id in expense_ids:
-        # mark the split for from_user as settled
-        split_result = (
+        print(f"--- processing expense_id: {expense_id}")
+
+        split_check = (
             supabase.table("expense_splits")
-            .update({"is_settled": True})
+            .select("amount_owed")
             .eq("expense_id", expense_id)
             .eq("user_id", data.from_user_id)
+            .eq("is_settled", False)
             .execute()
         )
-        if split_result.data:
-            settled_count += 1
+        print(f"split_check result: {split_check.data}")
 
-        # check if all splits for this expense are now settled
+        if split_check.data:
+            total_amount += split_check.data[0]["amount_owed"]
+            settled_count += 1
+            update_result = supabase.table("expense_splits").update({"is_settled": True}).eq("expense_id", expense_id).eq("user_id", data.from_user_id).execute()
+            print(f"split update result: {update_result.data}")
+        else:
+            print(f"no unsettled split found for expense {expense_id}")
+
         splits = (
             supabase.table("expense_splits")
             .select("is_settled")
             .eq("expense_id", expense_id)
             .execute()
         )
+        print(f"all splits for expense: {splits.data}")
         all_settled = all(s["is_settled"] for s in splits.data) if splits.data else False
+        print(f"all_settled: {all_settled}")
+
         if all_settled:
             supabase.table("expenses").update({
                 "tx_status": "settled",
                 "tx_hash": data.tx_hash,
             }).eq("id", expense_id).execute()
+            print(f"expense {expense_id} marked as settled")
+
+    print(f"total_amount: {total_amount}")
+    print(f"settled_count: {settled_count}")
+
+    try:
+        insert_result = supabase.table("settlements").insert({
+            "group_id": data.group_id,
+            "from_user": data.from_user_id,
+            "to_user": data.to_user_id,
+            "amount": round(total_amount, 6),
+            "tx_hash": data.tx_hash,
+            "tx_status": "confirmed",
+        }).execute()
+        print(f"settlement insert result: {insert_result.data}")
+    except Exception as e:
+        print(f"settlement insert FAILED: {e}")
 
     log_activity(
         data.from_user_id,
         data.group_id,
-        "expense_settled",
-        f"Settled {settled_count} split(s) — tx {data.tx_hash[:12]}..."
+        "payment_settled",
+        f"Settled ADA {round(total_amount, 6)} — tx {data.tx_hash[:12]}..."
     )
 
     return {"message": "Splits settled", "settled": settled_count}
@@ -196,3 +245,4 @@ def get_user_summary(user_id: str):
         "you_are_owed": round(total_owed_to_you, 6),
         "you_owe": round(total_you_owe, 6),
     }
+    
