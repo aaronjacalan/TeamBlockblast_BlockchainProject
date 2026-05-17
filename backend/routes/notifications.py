@@ -26,3 +26,9 @@ def mark_as_read(notification_id: str):
 def mark_all_read(user_id: str):
     supabase.table("notifications").update({"is_read": True}).eq("user_id", user_id).execute()
     return {"message": "All marked as read"}
+
+
+@router.delete("/{notification_id}")
+def delete_notification(notification_id: str):
+    supabase.table("notifications").delete().eq("id", notification_id).execute()
+    return {"message": "Deleted"}

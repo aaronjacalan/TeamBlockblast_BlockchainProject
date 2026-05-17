@@ -245,4 +245,3 @@ def get_user_summary(user_id: str):
         "you_are_owed": round(total_owed_to_you, 6),
         "you_owe": round(total_you_owe, 6),
     }
-    

@@ -37,11 +37,10 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
     try {
       const { group_id } = notification.metadata;
 
-      // add user to group
-      const res = await fetch(`http://localhost:8000/api/groups/${group_id}/join-direct`, {
-        method: "POST",
+      const res = await fetch(`http://localhost:8000/api/groups/${group_id}/invite/respond`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ user_id: userId, action: "accept" }),
       });
 
       if (!res.ok) {
@@ -49,11 +48,6 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
         alert(err.detail);
         return;
       }
-
-      // mark notification as read
-      await fetch(`http://localhost:8000/api/notifications/${notification.id}/read`, {
-        method: "PUT",
-      });
 
       await fetchNotifications();
       onInviteAccepted();
@@ -63,10 +57,19 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
   };
 
   const handleDecline = async (notification: any) => {
-    await fetch(`http://localhost:8000/api/notifications/${notification.id}/read`, {
-      method: "PUT",
-    });
-    await fetchNotifications();
+    try {
+      const { group_id } = notification.metadata;
+
+      await fetch(`http://localhost:8000/api/groups/${group_id}/invite/respond`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: userId, action: "reject" }),
+      });
+
+      await fetchNotifications();
+    } catch (err) {
+      alert("Failed to decline invite.");
+    }
   };
 
   const filteredNotifications = notifications.filter((item) => {
