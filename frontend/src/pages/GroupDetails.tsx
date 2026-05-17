@@ -6,6 +6,8 @@ import "./GroupDetails.css";
 interface Member {
   id?: string;
   user_id: string;
+  name?: string;
+  email?: string;
   stake_address?: string;
   payment_address?: string;
   joined_at?: string;
@@ -94,8 +96,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
   const [settleUpAddress, setSettleUpAddress] = useState("");
   const [settleUpAmount, setSettleUpAmount] = useState("");
-  const [settleUpMemberId, setSettleUpMemberId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [settleUpMemberId, setSettleUpMemberId] = useState("");
+  const [settlements, setSettlements] = useState<any[]>([]);
 
   // Edit Group Modal
   const [showEditGroupModal, setShowEditGroupModal] = useState(false);
@@ -121,6 +124,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   useEffect(() => {
     fetchGroup();
     fetchExpenses();
+    fetchSettlements();
   }, [groupId]);
 
   useEffect(() => {
@@ -129,6 +133,18 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       setEditGroupDescription(group.description || "");
     }
   }, [group]);
+
+  const fetchSettlements = async () => {
+      try {
+        const res = await fetch(`/api/expenses/settlements?group_id=${groupId}`);
+        if (!res.ok) throw new Error("Failed to fetch settlements");
+        const data = await res.json();
+        setSettlements(Array.isArray(data) ? data : []);
+      } catch (err) {
+        console.error(err);
+        setSettlements([]);
+      }
+    };
 
   const fetchGroup = async () => {
     try {
@@ -247,29 +263,37 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
   const memberCount = group.group_members?.length || 1;
   const yourShare = totalSpend / memberCount;
-  const netBalance = youPaid - yourShare;
-  const youAreOwed = netBalance > 0 ? netBalance : 0;
-  const youOwe = netBalance < 0 ? Math.abs(netBalance) : 0;
 
   const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
 
-  // for each member, calculate: what they paid - their equal share
   const balanceMap: Record<string, number> = {};
 
   group.group_members?.forEach((m) => {
-    if (m.user_id === userId) return; // skip yourself
+    if (m.user_id === userId) return;
 
-    const theyPaid = expenses
-      .filter(e => e.paid_by === m.user_id)
-      .reduce((sum, e) => sum + e.amount, 0);
+    let balance = 0;
 
-    const theirShare = totalSpend / memberCount;
-    const theirNet = theyPaid - theirShare;
+    expenses.forEach((exp) => {
+      const splits = exp.expense_splits || [];
 
-    // if their net is negative, they owe you
-    // if their net is positive, you owe them
-    balanceMap[m.user_id] = -theirNet;
+      if (exp.paid_by === userId) {
+        // you paid — find their unsettled split
+        const theirSplit = splits.find(s => s.user_id === m.user_id && !s.is_settled);
+        if (theirSplit) balance += theirSplit.amount_owed;
+      } else if (exp.paid_by === m.user_id) {
+        // they paid — find your unsettled split
+        const yourSplit = splits.find(s => s.user_id === userId && !s.is_settled);
+        if (yourSplit) balance -= yourSplit.amount_owed;
+      }
+    });
+
+    balanceMap[m.user_id] = balance;
   });
+
+  // sum up balanceMap to get overall you owe / you are owed
+  const youAreOwed = Object.values(balanceMap).filter(v => v > 0).reduce((sum, v) => sum + v, 0);
+  const youOwe = Object.values(balanceMap).filter(v => v < 0).reduce((sum, v) => sum + Math.abs(v), 0);
+  const netBalance = youAreOwed - youOwe;
 
   const memberById = (uid: string) =>
     group.group_members?.find((m) => m.user_id === uid);
@@ -352,7 +376,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       const txHash = await wallet.submitTx(signedTx);
 
       // POST: mark splits as settled in the database
-      await fetch("/api/expenses/settle", {
+      const settleRes = await fetch("/api/expenses/settle", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -362,12 +386,17 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
           tx_hash: txHash,
         }),
       });
+      console.log("settle status:", settleRes.status);
+      const settleData = await settleRes.json();
+      console.log("settle response:", settleData);
 
       await fetchExpenses();
+      await fetchSettlements();
       onExpenseAdded();
 
       alert(`Transaction successful!\nHash: ${txHash}`);
       setShowSettleUpModal(false);
+      setSettleUpMemberId("");
       setSettleUpAddress("");
       setSettleUpAmount("");
       setSettleUpMemberId("");
@@ -377,6 +406,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const getMemberLabel = (uid: string): string => {
+    if (uid === userId) return "You";
+    const member = group?.group_members.find(m => m.user_id === uid);
+    if (!member) return uid;
+    return member.name || member.email || (member.stake_address?.slice(0, 12) + "...") || uid;
   };
 
   return (
@@ -407,7 +443,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
                   Edit Group
                 </button>
-                <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
+                <button className="btn btn-secondary" onClick={() => {
+                    setShowSettleUpModal(true);
+                  }}>
                   <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
                   Settle Up
                 </button>
@@ -506,26 +544,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                             <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
                             <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
                               Paid by <strong style={{ color: "#000" }}>{payerLabel(exp.paid_by)}</strong>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  marginLeft: 10,
-                                  padding: "2px 8px",
-                                  borderRadius: 6,
-                                  fontSize: 10,
-                                  fontWeight: 600,
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.04em",
-                                  background: exp.tx_status === "settled"
-                                    ? "var(--color-tertiary-light)"
-                                    : "#fef9c3",
-                                  color: exp.tx_status === "settled"
-                                    ? "var(--color-tertiary)"
-                                    : "#a16207",
-                                }}
-                              >
-                                {exp.tx_status}
-                              </span>
                             </p>
                           </div>
                         </div>
@@ -556,91 +574,69 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   </div>
                 )}
 
-                {activeTab === "transactions" && (
-                  <div className="gd-expense-list">
-                    {settledExpenses.length === 0 && (
-                      <p style={{ color: "var(--color-zinc-400)", fontSize: 14 }}>
-                        No settled transactions yet.
+                {settlements.map((s) => (
+                <div key={s.id} className="gd-expense-row card card-p">
+                  <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+                    <div className="gd-expense-icon" style={{ background: "var(--color-tertiary-light, #f0fdf4)" }}>
+                      <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)" }}>
+                        check_circle
+                      </span>
+                    </div>
+                    <div>
+                      <p className="text-headline-sm" style={{ fontSize: 15 }}>
+                        {s.from_user_id === userId ? "You" : s.from_user?.display_name || s.from_user?.email || "Someone"}
+                        {" → "}
+                        {s.to_user_id === userId ? "You" : s.to_user?.display_name || s.to_user?.email || "Someone"}
                       </p>
-                    )}
-                    {settledExpenses.map((exp) => (
-                      <div key={exp.id} className="gd-expense-row card card-p">
-                        <div style={{ display: "flex", alignItems: "center", gap: 20, minWidth: 0, flex: 1 }}>
-                          <div className="gd-expense-icon">
-                            <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)" }}>
-                              check_circle
-                            </span>
-                          </div>
-                          <div style={{ minWidth: 0, flex: 1 }}>
-                            <p className="text-headline-sm" style={{ fontSize: 15 }}>{exp.name}</p>
-                            <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                              Paid by <strong style={{ color: "#000" }}>{payerLabel(exp.paid_by)}</strong>
-                            </p>
-                            <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                              <code
-                                style={{
-                                  fontSize: 11,
-                                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                                  background: "var(--color-zinc-100)",
-                                  padding: "2px 6px",
-                                  borderRadius: 4,
-                                  color: "var(--color-zinc-700)",
-                                }}
-                                title={exp.tx_hash ?? ""}
-                              >
-                                {shortHash(exp.tx_hash ?? "")}
-                              </code>
-                              <button
-                                type="button"
-                                onClick={() => exp.tx_hash && copyHash(exp.tx_hash)}
-                                title="Copy tx hash"
-                                style={{
-                                  background: "none",
-                                  border: "none",
-                                  cursor: "pointer",
-                                  padding: 2,
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  color: copiedHash === exp.tx_hash ? "var(--color-tertiary)" : "var(--color-zinc-500)",
-                                }}
-                              >
-                                <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
-                                  {copiedHash === exp.tx_hash ? "check" : "content_copy"}
-                                </span>
-                              </button>
-                              {exp.tx_hash && (
-                                <a
-                                  href={explorerTxUrl(exp.tx_hash)}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  title="View on Cardanoscan"
-                                  style={{
-                                    display: "inline-flex",
-                                    alignItems: "center",
-                                    color: "var(--color-zinc-500)",
-                                  }}
-                                >
-                                  <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
-                                </a>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div style={{ textAlign: "right", marginLeft: 16 }}>
-                          <p className="text-headline-sm" style={{ fontSize: 15 }}>
-                            {exp.currency} {exp.amount.toLocaleString()}
-                          </p>
-                          <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
-                            {new Date(exp.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
+                      <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
+                        Paid by <strong style={{ color: "#000" }}>
+                          {s.from_user === userId ? "You" : s.from_user_data?.display_name || s.from_user_data?.email || "Someone"}
+                        </strong>
+                      </p>
+                      {/* hash on the left */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
+                        <code style={{
+                          fontSize: 11,
+                          fontFamily: "ui-monospace, monospace",
+                          background: "var(--color-zinc-100)",
+                          padding: "2px 6px",
+                          borderRadius: 4,
+                          color: "var(--color-zinc-700)",
+                        }}>
+                          {shortHash(s.tx_hash)}
+                        </code>
+                        <button
+                          onClick={() => copyHash(s.tx_hash)}
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: 2, display: "inline-flex", alignItems: "center", color: copiedHash === s.tx_hash ? "var(--color-tertiary)" : "var(--color-zinc-500)" }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>
+                            {copiedHash === s.tx_hash ? "check" : "content_copy"}
+                          </span>
+                        </button>
+                        <a
+                          href={explorerTxUrl(s.tx_hash)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{ display: "inline-flex", alignItems: "center", color: "var(--color-zinc-500)" }}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                        </a>
                       </div>
-                    ))}
+                    </div>
                   </div>
-                )}
-              </section>
 
+                  <div style={{ textAlign: "right" }}>
+                    <p className="text-headline-sm" style={{ fontSize: 15, color: "var(--color-tertiary)" }}>
+                      ADA {s.amount.toFixed(2)}
+                    </p>
+                    <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                      {new Date(s.initiated_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+              ))}
+              </section>
+              
               {/* Side Panel */}
               <aside className="gd-sidebar">
                 <div className="card gd-desc-card">
@@ -769,7 +765,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 >
                   {group.group_members?.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
-                      {m.user_id === userId ? "You" : memberDisplay(m)}
+                      {getMemberLabel(m.user_id)}
                     </option>
                   ))}
                 </select>
@@ -863,7 +859,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   <span className="material-symbols-outlined" style={{ color: "var(--color-error)", fontSize: 22 }}>person_remove</span>
                 </div>
                 <p className="text-body-md">
-                  Remove <strong>{memberToDeleteObj ? memberDisplay(memberToDeleteObj) : "this member"}</strong> from this group?
+                  Remove <strong>{memberToDeleteObj ? getMemberLabel(memberToDeleteObj.user_id) : ""}</strong> from this group?
                 </p>
               </div>
             </div>
