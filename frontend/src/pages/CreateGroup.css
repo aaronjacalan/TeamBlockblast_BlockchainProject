@@ -227,6 +227,12 @@
   background: #fff;
 }
 
+.cg-name-input.cg-error,
+.cg-desc-input.cg-error {
+  border-color: var(--color-error);
+  color: var(--color-error);
+}
+
 .cg-desc-count {
   display: block;
   font-size: 11px;
@@ -350,6 +356,9 @@
 /* ── CTA ──────────────────────────────────────────────────────────────────── */
 .cg-cta {
   padding-top: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+  gap: 12px;
 }
 
 .cg-create-btn {
@@ -373,6 +382,48 @@
 
 .cg-create-btn:active {
   transform: scale(0.98);
+}
+
+.cg-create-btn:disabled {
+  background: var(--color-zinc-200);
+  color: var(--color-zinc-500);
+  cursor: not-allowed;
+  box-shadow: none;
+  opacity: 0.9;
+}
+
+.cg-pay-btn {
+  width: 100%;
+  padding: 18px;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-family);
+  font-size: 18px;
+  font-weight: 600;
+  border-radius: var(--radius-xl);
+  border: 1px solid #000;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cg-pay-btn:hover {
+  opacity: 0.9;
+}
+
+.cg-pay-btn:active {
+  transform: scale(0.98);
+}
+
+.cg-pay-btn.paid {
+  background: var(--color-tertiary-light);
+  color: var(--color-tertiary);
+  border-color: var(--color-tertiary-light);
+  cursor: default;
+}
+
+.cg-pay-btn.cg-error {
+  border-color: var(--color-error);
+  color: var(--color-error);
 }
 
 /* ── Info Alert ───────────────────────────────────────────────────────────── */
