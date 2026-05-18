@@ -122,6 +122,8 @@ const App: React.FC = () => {
           currentPage={currentPage}
           onNavigate={navigate}
           walletAddress={walletAddress}
+          displayName={displayName}
+          email={email}
           onLogout={handleLogout}
           onOpenNotifications={() => setNotificationsOpen(true)}
         />
@@ -139,9 +141,8 @@ const App: React.FC = () => {
           setUserId(user.id);
           setWalletAddress(user.stake_address);
 
-          // ADD THESE
-          setDisplayName(user.displayName);
-          setEmail(user.email);
+          setDisplayName(user.display_name || "");
+          setEmail(user.email || "");
 
           await fetchGroups(user.id);
           await fetchActivities(user.id);
