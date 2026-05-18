@@ -73,9 +73,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       if (!verifyRes.ok) throw new Error("Failed to verify signature");
       const { user } = await verifyRes.json();
 
-      // Transition to profile step instead of calling onLogin immediately
+      // if user already has display name and email, skip profile step
+    if (user.display_name && user.email) {
+      onLogin(user);
+    } else {
       setPendingUser(user);
       setStep("profile");
+    }
     } catch (error) {
       console.error("Error connecting to wallet:", error);
       alert("Failed to connect wallet. Please try again.");
@@ -107,9 +111,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setProfileErrors({});
     setProfileLoading(true);
     try {
-      // Merge profile info into the user object and proceed
-      const enrichedUser = { ...pendingUser, displayName: displayName.trim(), email: email.trim() };
-      onLogin(enrichedUser);
+      const user = pendingUser as any;
+
+      // save to database
+      const res = await fetch("/api/auth/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          user_id: user.id,
+          display_name: displayName.trim(),
+          email: email.trim(),
+        }),
+      });
+
+      if (!res.ok) throw new Error("Failed to save profile");
+      const updatedUser = await res.json();
+
+      onLogin(updatedUser);
     } catch (error) {
       console.error("Error saving profile:", error);
       alert("Failed to save profile. Please try again.");
