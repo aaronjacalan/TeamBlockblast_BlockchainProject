@@ -64,8 +64,11 @@
 .login-right {
   display: flex;
   justify-content: flex-end;
+  /* Establish a stacking context so the positioned cards overlap correctly */
+  position: relative;
 }
 
+/* ─── Card step transitions ─────────────────────────────────────────────── */
 .login-card {
   width: 100%;
   max-width: 440px;
@@ -76,6 +79,27 @@
   box-shadow: var(--shadow-sm);
 }
 
+.login-card-step {
+  transition: opacity 0.3s ease, transform 0.35s ease;
+}
+
+.login-card-visible {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  pointer-events: auto;
+  position: relative;
+}
+
+.login-card-hidden {
+  opacity: 0;
+  transform: translateX(24px) scale(0.98);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+}
+
+/* ─── Card internals ─────────────────────────────────────────────────────── */
 .login-card-header {
   margin-bottom: 24px;
 }
@@ -103,12 +127,23 @@
   font-family: var(--font-family);
   font-size: 15px;
   outline: none;
-  transition: border-color 0.15s, background 0.15s;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  box-sizing: border-box;
 }
 
 .login-input:focus {
   border-color: var(--color-tertiary);
   background: #fff;
+  box-shadow: 0 0 0 3px rgba(115, 46, 228, 0.1);
+}
+
+.login-input-error {
+  border-color: #dc2626 !important;
+  background: #fff5f5 !important;
+}
+
+.login-input-error:focus {
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1) !important;
 }
 
 .login-submit {
@@ -135,6 +170,12 @@
 
 .login-submit:active {
   transform: scale(0.98);
+}
+
+.login-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .login-divider {
@@ -173,6 +214,7 @@
   color: var(--color-zinc-600);
   font-size: 12px;
   transition: background 0.15s, color 0.15s;
+  text-decoration: none;
 }
 
 .login-info-card:hover {
@@ -184,6 +226,100 @@
   font-size: 20px;
 }
 
+/* ─── Profile step extras ─────────────────────────────────────────────────── */
+.login-profile-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(115, 46, 228, 0.1);
+  border: 1px solid rgba(115, 46, 228, 0.2);
+}
+
+.login-wallet-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #16a34a;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+  width: fit-content;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.login-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.login-input-icon {
+  position: absolute;
+  left: 12px;
+  font-size: 18px;
+  color: var(--color-zinc-400);
+  pointer-events: none;
+  transition: color 0.15s;
+  /* keep icon on top of input background */
+  z-index: 1;
+}
+
+.login-input-wrapper:focus-within .login-input-icon {
+  color: var(--color-tertiary);
+}
+
+.login-input-with-icon {
+  padding-left: 40px;
+}
+
+.login-field-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: #dc2626;
+  margin: 0;
+}
+
+.login-back-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  color: var(--color-on-surface-variant);
+  font-size: 13px;
+  font-family: var(--font-family);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: var(--radius-lg);
+  transition: color 0.15s, background 0.15s;
+}
+
+.login-back-btn:hover {
+  color: var(--color-on-surface);
+  background: var(--color-zinc-100, #f4f4f5);
+}
+
+.login-back-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ─── Accent & background ─────────────────────────────────────────────────── */
 .login-accent {
   position: fixed;
   bottom: 0;
@@ -252,6 +388,7 @@
   }
 }
 
+/* ─── Responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 1024px) {
   .login-shell {
     grid-template-columns: 1fr;
@@ -263,6 +400,12 @@
 
   .login-title {
     font-size: 48px;
+  }
+
+  .login-card-hidden {
+    right: auto;
+    left: 50%;
+    transform: translateX(calc(-50% + 24px)) scale(0.98);
   }
 }
 
