@@ -6,6 +6,8 @@ interface HeaderProps {
   currentPage: Page;
   onNavigate: (page: Page) => void;
   walletAddress: string;
+  displayName: string;
+  email: string;
   onLogout: () => void;
   onOpenNotifications: () => void;
 }
@@ -14,12 +16,15 @@ const Header: React.FC<HeaderProps> = ({
   currentPage,
   onNavigate,
   walletAddress,
+  displayName,
+  email,
   onLogout,
   onOpenNotifications,
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
-
+  const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
+  const userLabel = displayName || email || walletShort;
   const navLinks: { label: string; page: Page }[] = [
     { label: "Dashboard", page: "dashboard" },
     { label: "Groups", page: "groups" },
@@ -34,8 +39,6 @@ const Header: React.FC<HeaderProps> = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
-  const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 
   return (
     <header className="header">
@@ -120,7 +123,7 @@ const Header: React.FC<HeaderProps> = ({
               >
                 {walletAddress.slice(-2).toUpperCase()}
               </div>
-              {walletShort}
+              {userLabel}
               <span className="material-symbols-outlined" style={{ fontSize: 16, color: "var(--color-zinc-400)" }}>
                 expand_more
               </span>
@@ -143,7 +146,7 @@ const Header: React.FC<HeaderProps> = ({
               >
                 <div style={{ padding: "12px 16px", borderBottom: "1px solid var(--color-zinc-100)" }}>
                   <p style={{ fontSize: 13, fontWeight: 700, color: "#000" }}>Wallet Connected</p>
-                  <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 2 }}>{walletShort}</p>
+                  <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 2 }}>{userLabel}</p>
                 </div>
                 <button
                   onClick={() => { setMenuOpen(false); onNavigate("settings"); }}

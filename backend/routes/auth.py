@@ -61,7 +61,7 @@ def verify_signature(data: VerifyRequest):
     stake_address = data.stake_address.strip()
 
     result = supabase.table("users") \
-        .select("id, stake_address, auth_nonce, nonce_expires_at") \
+        .select("id, stake_address, auth_nonce, nonce_expires_at, display_name, email, payment_address") \
         .eq("stake_address", stake_address) \
         .execute()
 
@@ -99,6 +99,8 @@ def verify_signature(data: VerifyRequest):
             "id": refreshed["id"],
             "stake_address": refreshed.get("stake_address", user["stake_address"]),
             "payment_address": refreshed.get("payment_address"),
+            "display_name": refreshed.get("display_name", ""),
+            "email": refreshed.get("email", ""),
         },
         "message": "Welcome back!",
     }
