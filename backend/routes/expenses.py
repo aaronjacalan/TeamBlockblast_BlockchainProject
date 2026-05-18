@@ -103,12 +103,6 @@ def get_settlements(group_id: str):
 
 @router.patch("/settle")
 def settle_splits(data: SettleRequest):
-    print("=== SETTLE REQUEST ===")
-    print(f"group_id: {data.group_id}")
-    print(f"from_user_id: {data.from_user_id}")
-    print(f"to_user_id: {data.to_user_id}")
-    print(f"tx_hash: {data.tx_hash}")
-
     expenses_result = (
         supabase.table("expenses")
         .select("id, amount")
@@ -116,7 +110,6 @@ def settle_splits(data: SettleRequest):
         .eq("paid_by", data.to_user_id)
         .execute()
     )
-    print(f"expenses found: {expenses_result.data}")
 
     if not expenses_result.data:
         print("NO EXPENSES FOUND - returning early")
@@ -127,8 +120,6 @@ def settle_splits(data: SettleRequest):
     total_amount = 0.0
 
     for expense_id in expense_ids:
-        print(f"--- processing expense_id: {expense_id}")
-
         split_check = (
             supabase.table("expense_splits")
             .select("amount_owed")
@@ -137,7 +128,6 @@ def settle_splits(data: SettleRequest):
             .eq("is_settled", False)
             .execute()
         )
-        print(f"split_check result: {split_check.data}")
 
         if split_check.data:
             total_amount += split_check.data[0]["amount_owed"]
@@ -176,6 +166,21 @@ def settle_splits(data: SettleRequest):
             "tx_hash": data.tx_hash,
             "tx_status": "confirmed",
         }).execute()
+        
+        # notify the recipient
+        supabase.table("notifications").insert({
+            "user_id": data.to_user_id,
+            "type": "payment_settled",
+            "title": "Payment Received",
+            "message": f"You received ADA {round(total_amount, 6)} — tx {data.tx_hash[:12]}...",
+            "metadata": {
+                "group_id": data.group_id,
+                "from_user_id": data.from_user_id,
+                "tx_hash": data.tx_hash,
+                "amount": round(total_amount, 6),
+            }
+        }).execute()
+        
         print(f"settlement insert result: {insert_result.data}")
     except Exception as e:
         print(f"settlement insert FAILED: {e}")
