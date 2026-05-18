@@ -28,6 +28,8 @@ const App: React.FC = () => {
   const [selectedGroupId, setSelectedGroupId] = useState("");
   const [activities, setActivities] = useState<any[]>([]);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [displayName, setDisplayName] = useState("");
+  const [email, setEmail] = useState("");
 
   const isLoggedIn = Boolean(walletAddress);
   const [summary, setSummary] = useState({ you_are_owed: 0, you_owe: 0 });
@@ -132,16 +134,22 @@ const App: React.FC = () => {
       )}
 
       {currentPage === "login" && (
-        <Login
-          onLogin={async (user: any) => {
-            setUserId(user.id);
-            setWalletAddress(user.stake_address);
-            await fetchGroups(user.id);  // pass user.id directly
-            await fetchActivities(user.id);
-            await fetchSummary(user.id);
-            navigate("dashboard");
-          }}
-        />
+       <Login
+        onLogin={async (user: any) => {
+          setUserId(user.id);
+          setWalletAddress(user.stake_address);
+
+          // ADD THESE
+          setDisplayName(user.displayName);
+          setEmail(user.email);
+
+          await fetchGroups(user.id);
+          await fetchActivities(user.id);
+          await fetchSummary(user.id);
+
+          navigate("dashboard");
+        }}
+      />
       )}
 
       {currentPage === "dashboard" && (
@@ -149,6 +157,8 @@ const App: React.FC = () => {
           groups={groups}
           activities={activities}
           summary={summary}
+          displayName={displayName}
+          email={email}
           onNavigate={navigate}
           onCreateGroup={() => setCreateGroupOpen(true)}
           onSelectGroup={navigateToGroup}
@@ -198,6 +208,8 @@ const App: React.FC = () => {
         <Settings
           walletAddress={walletAddress}
           userId={userId}
+          displayName={displayName}
+          email={email}
           onNavigate={navigate}
         />
       )}

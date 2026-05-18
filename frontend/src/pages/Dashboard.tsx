@@ -12,9 +12,20 @@ interface DashboardProps {
   groups: any[];
   activities: any[];
   summary: { you_are_owed: number; you_owe: number };
+  displayName: string;
+  email: string;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onCreateGroup, onSelectGroup, groups, activities, summary }) => {
+const Dashboard: React.FC<DashboardProps> = ({
+  onNavigate,
+  onCreateGroup,
+  onSelectGroup,
+  groups,
+  activities,
+  summary,
+  displayName,
+  email
+}) => {
   const lovelace = useLovelace();
   const walletBalance = lovelace ? (parseInt(lovelace) / 1_000_000).toFixed(2) : "0.00";
 
