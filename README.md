@@ -1,7 +1,14 @@
 # FairShare 💜
 
 A minimalist Splitwise-like expense splitting app built on the **Cardano blockchain**.  
-Create groups, add shared expenses, and automatically split costs — all powered by Web3.
+
+The app allows users to:
+- Create groups
+- Track shared expenses
+- Automatically split costs among members
+- Settle balances using Cardano wallet transactions
+
+FairShare uses Cardano wallets for authentication and blockchain-based payments, making expense sharing transparent and decentralized.
 
 ---
 
@@ -13,6 +20,7 @@ Create groups, add shared expenses, and automatically split costs — all powere
 | Backend    | Python + FastAPI                  |
 | Blockchain | Cardano                           |
 | API        | Blockfrost                        |
+| Wallet     | Lace Wallet Extension             |
 
 ---
 
@@ -35,6 +43,7 @@ Create groups, add shared expenses, and automatically split costs — all powere
 - Add, edit, or remove shared expenses
 - Automatically calculates total and splits cost among members
 - Settle payments via Cardano blockchain transactions
+- FastAPI backend integration with Blockfrost API
 
 ---
 
