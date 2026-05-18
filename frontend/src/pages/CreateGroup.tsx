@@ -1,6 +1,5 @@
 import React, { useRef, useState } from "react";
 import "./CreateGroup.css";
-import { groupMembers } from "../data";
 
 interface CreateGroupProps {
   onClose: () => void;
@@ -11,9 +10,17 @@ interface CreateGroupProps {
 const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId }) => {
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
-  const [members, setMembers] = useState(groupMembers);
+  const [members, setMembers] = useState([
+    {
+      id: userId,
+      name: "You (Owner)",
+      email: "",
+      isOwner: true,
+      avatar: null,
+    },
+  ]);
   const [hoveredMember, setHoveredMember] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);  // added
+  const [loading, setLoading] = useState(false);
   const [hasPaid, setHasPaid] = useState(false);
   const [nameError, setNameError] = useState(false);
   const [descriptionError, setDescriptionError] = useState(false);
@@ -22,20 +29,26 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const descriptionErrorTimer = useRef<number | null>(null);
   const paymentErrorTimer = useRef<number | null>(null);
 
-  // Add member modal
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
 
-  // Delete member modal
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
 
   const handleAddMember = async () => {
     if (!newEmail.trim()) return;
+
+    const alreadyAdded = members.some((m) => m.email === newEmail.trim());
+    if (alreadyAdded) {
+      alert("This member has already been added.");
+      return;
+    }
+
     try {
-      const res = await fetch(`http://localhost:8000/api/auth/profile/by-email?email=${encodeURIComponent(newEmail.trim())}`);
-      let displayName = newEmail.trim(); // fallback to email
+      const res = await fetch(
+        `http://localhost:8000/api/auth/profile/by-email?email=${encodeURIComponent(newEmail.trim())}`
+      );
+      let displayName = newEmail.trim();
       if (res.ok) {
         const data = await res.json();
         if (data.display_name) displayName = data.display_name;
@@ -50,10 +63,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
           avatar: null,
         },
       ]);
-      setNewEmail("");
-      setShowAddModal(false);
-    } catch (err) {
-      // if lookup fails, just use email
+    } catch {
       setMembers((prev) => [
         ...prev,
         {
@@ -64,6 +74,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
           avatar: null,
         },
       ]);
+    } finally {
       setNewEmail("");
       setShowAddModal(false);
     }
@@ -85,10 +96,6 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const memberToDeleteObj = members.find((m) => m.id === memberToDelete);
 
   const handleDescriptionChange = (value: string) => {
-    if (value.length <= 100) {
-      setGroupDescription(value);
-      return;
-    }
     setGroupDescription(value.slice(0, 100));
   };
 
@@ -101,13 +108,11 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
       if (nameErrorTimer.current) window.clearTimeout(nameErrorTimer.current);
       nameErrorTimer.current = window.setTimeout(() => setNameError(false), 5000);
     }
-
     if (descriptionMissing) {
       setDescriptionError(true);
       if (descriptionErrorTimer.current) window.clearTimeout(descriptionErrorTimer.current);
       descriptionErrorTimer.current = window.setTimeout(() => setDescriptionError(false), 5000);
     }
-
     if (nameMissing || descriptionMissing) return;
     if (!hasPaid) {
       setPaymentError(true);
@@ -118,11 +123,6 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
 
     setLoading(true);
     try {
-        console.log("Creating group with:", {
-          name: groupName.trim(),
-          description: groupDescription,
-          created_by: userId,
-        });
       const res = await fetch("/api/groups/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -135,6 +135,29 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
       });
 
       if (!res.ok) throw new Error("Failed to create group");
+      const group = await res.json();
+
+      // send invites to all non-owner members
+      const nonOwners = members.filter((m) => !m.isOwner && m.email);
+      if (nonOwners.length > 0) {
+        const inviteResults = await Promise.allSettled(
+          nonOwners.map((m) =>
+            fetch(`/api/groups/${group.id}/invite`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                email: m.email,
+                invited_by: userId,
+              }),
+            })
+          )
+        );
+
+        const failed = inviteResults.filter((r) => r.status === "rejected").length;
+        if (failed > 0) {
+          alert(`Group created! However, ${failed} invite(s) could not be sent.`);
+        }
+      }
 
       onCreated();
     } catch (err) {
@@ -146,7 +169,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
 
   return (
     <>
-      <div className="modal-backdrop" onClick={onClose}> 
+      <div className="modal-backdrop" onClick={onClose}>
         <div className="modal-box cg-modal-box" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <div>
@@ -163,7 +186,6 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
           <div className="modal-body cg-modal-body">
             <div className="cg-modal-grid">
               <div className="card cg-card">
-                {/* Group Identity */}
                 <div className="cg-identity">
                   <div className="cg-name-field">
                     <label className="cg-label">GROUP NAME</label>
@@ -196,10 +218,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
                 <div className="cg-cta">
                   <button
                     className={`cg-pay-btn${hasPaid ? " paid" : ""}${paymentError ? " cg-error" : ""}`}
-                    onClick={() => {
-                      setHasPaid(true);
-                      setPaymentError(false);
-                    }}
+                    onClick={() => { setHasPaid(true); setPaymentError(false); }}
                     disabled={hasPaid}
                   >
                     {hasPaid ? "Paid 1 ADA" : "Pay 1 ADA"}

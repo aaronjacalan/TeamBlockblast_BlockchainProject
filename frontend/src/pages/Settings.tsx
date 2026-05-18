@@ -20,7 +20,7 @@ const Settings: React.FC<SettingsProps> = ({
   const [email, setEmail] = useState(initialEmail);
   const [displayName, setDisplayName] = useState(initialDisplayName);
   const [saved, setSaved] = useState(false);
-  const [groupActivity, setGroupActivity] = useState(true);
+  const [groupInvite, setGroupInvite] = useState(true);
   const [settlements, setSettlements] = useState(true);
 
   const handleSave = async () => {
@@ -187,7 +187,7 @@ const Settings: React.FC<SettingsProps> = ({
                     marginBottom: 8,
                   }}
                 >
-                  Notification Email
+                  Email
                 </label>
                 <input
                   style={{
@@ -247,11 +247,11 @@ const Settings: React.FC<SettingsProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
               {[
                 {
-                  key: "groupActivity",
-                  title: "Group Activity",
-                  desc: "Get notified when someone adds a new expense to your groups.",
-                  value: groupActivity,
-                  onChange: setGroupActivity,
+                  key: "groupInvite",
+                  title: "Group Invites",
+                  desc: "Get notified when someone invites you to a group.",
+                  value: groupInvite,
+                  onChange: setGroupInvite,
                 },
                 {
                   key: "settlements",
