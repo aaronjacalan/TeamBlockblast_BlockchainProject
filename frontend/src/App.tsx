@@ -85,8 +85,16 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setWalletAddress("");
+    setUserId("");
+    setDisplayName("");
+    setEmail("");
     setGroups([]);
-    navigate("landing");
+    setActivities([]);
+    setSummary({ you_are_owed: 0, you_owe: 0 });
+    setSelectedGroupId("");
+    setCreateGroupOpen(false);
+    setNotificationsOpen(false);
+    navigate("login");
   };
 
   useEffect(() => {

@@ -564,11 +564,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                             {" → "}
                             {s.to_user_id === userId ? "You" : s.to_user?.display_name || s.to_user?.email || "Someone"}
                           </p>
-                          <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginTop: 3 }}>
-                            Paid by <strong style={{ color: "#000" }}>
-                              {s.from_user === userId ? "You" : s.from_user_data?.display_name || s.from_user_data?.email || "Someone"}
-                            </strong>
-                          </p>
                           {/* hash on the left */}
                           <div style={{ display: "flex", alignItems: "center", gap: 4, marginTop: 6 }}>
                             <code style={{
