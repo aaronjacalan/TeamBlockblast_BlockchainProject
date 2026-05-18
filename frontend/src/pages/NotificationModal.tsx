@@ -49,6 +49,11 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
         return;
       }
 
+      await fetch(`http://localhost:8000/api/notifications/read-all?user_id=${userId}`, {
+        method: "PUT",
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+
       await fetchNotifications();
       onInviteAccepted();
     } catch (err) {
@@ -65,6 +70,11 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: userId, action: "reject" }),
       });
+
+      await fetch(`http://localhost:8000/api/notifications/read-all?user_id=${userId}`, {
+        method: "PUT",
+      });
+      setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
 
       await fetchNotifications();
     } catch (err) {
