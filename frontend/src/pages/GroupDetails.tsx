@@ -404,13 +404,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     }
   };
 
-  const getMemberLabel = (uid: string): string => {
-    if (uid === userId) return "You";
-    const member = group?.group_members.find(m => m.user_id === uid);
-    if (!member) return uid;
-    return member.name || member.email || (member.stake_address?.slice(0, 12) + "...") || uid;
-  };
-
   return (
     <>
       <main className="group-details page-offset">
@@ -750,7 +743,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 >
                   {group.group_members?.map((m) => (
                     <option key={m.user_id} value={m.user_id}>
-                      {getMemberLabel(m.user_id)}
+                      {payerLabel(m.user_id)}
                     </option>
                   ))}
                 </select>
