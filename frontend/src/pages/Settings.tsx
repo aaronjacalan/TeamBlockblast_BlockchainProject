@@ -5,15 +5,23 @@ type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "cr
 interface SettingsProps {
   walletAddress: string;
   userId: string;
+  displayName: string;
+  email: string;
   onNavigate: (page: Page) => void;
 }
 
-const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }) => {
-  const [email, setEmail] = useState("");
+const Settings: React.FC<SettingsProps> = ({
+  walletAddress,
+  userId,
+  displayName: initialDisplayName,
+  email: initialEmail,
+  onNavigate,
+}) => {
+  const [email, setEmail] = useState(initialEmail);
+  const [displayName, setDisplayName] = useState(initialDisplayName);
   const [saved, setSaved] = useState(false);
   const [groupInvite, setGroupInvite] = useState(true);
   const [settlements, setSettlements] = useState(true);
-  const [displayName, setDisplayName] = useState("");
 
   const handleSave = async () => {
     if (!email.trim()) return;
@@ -30,16 +38,6 @@ const Settings: React.FC<SettingsProps> = ({ walletAddress, userId, onNavigate }
       alert("Failed to save email. Please try again.");
     }
   };
-
-  useEffect(() => {
-    const fetchProfile = async () => {
-      const res = await fetch(`http://localhost:8000/api/auth/profile?user_id=${userId}`);
-      const data = await res.json();
-      if (data.email) setEmail(data.email);
-      if (data.display_name) setDisplayName(data.display_name);
-    };
-    fetchProfile();
-  }, [userId]);
 
   const walletShort = `${walletAddress.slice(0, 6)}...${walletAddress.slice(-4)}`;
 

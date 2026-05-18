@@ -139,7 +139,7 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
         </h1>
 
         <p className="hero-sub">
-          FairShare brings Splitwise-style group expense splitting to Web3.
+          FairShare brings group expense splitting to Web3.
           No spreadsheets, no disputes — just transparent, on-chain settlements.
         </p>
 
