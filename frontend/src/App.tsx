@@ -194,13 +194,6 @@ const App: React.FC = () => {
             await fetchActivities(userId);
             await fetchSummary(userId);
           }}
-          onExpenseDeleted={async () => {
-            await fetchSummary(userId);
-          }}
-          onMemberRemoved={async () => {
-            await fetchSummary(userId);
-            await fetchGroups(userId);
-          }}
         />
       )}
 
