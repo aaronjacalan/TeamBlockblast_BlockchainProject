@@ -79,11 +79,11 @@ interface GroupDetailsProps {
   groupId: string;
   userId: string;
   onExpenseAdded: () => void;
-  onExpenseDeleted: () => void;
-  onMemberRemoved: () => void;
+  //onExpenseDeleted: () => void;
+  //onMemberRemoved: () => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onExpenseDeleted, onMemberRemoved }) => {
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded}) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -201,31 +201,31 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     }
   };
 
-  const handleDeleteExpense = async (expenseId: string) => {
-    try {
-      await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
-      setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
-      onExpenseDeleted(); // add this
-    } catch (err) {
-      alert("Failed to delete expense.");
-    }
-  };
+  // const handleDeleteExpense = async (expenseId: string) => {
+  //   try {
+  //     await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
+  //     setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
+  //     onExpenseDeleted(); // add this
+  //   } catch (err) {
+  //     alert("Failed to delete expense.");
+  //   }
+  // };
 
-  const handleRemoveMember = async () => {
-    if (!memberToDelete) return;
-    try {
-      await fetch(`/api/groups/${groupId}/members/${memberToDelete}?requester_id=${userId}`, {
-        method: "DELETE",
-      });
-      await fetchGroup();
-      onMemberRemoved(); // add this
-    } catch (err) {
-      alert("Failed to remove member.");
-    } finally {
-      setMemberToDelete(null);
-      setShowDeleteMemberModal(false);
-    }
-  };
+  // const handleRemoveMember = async () => {
+  //   if (!memberToDelete) return;
+  //   try {
+  //     await fetch(`/api/groups/${groupId}/members/${memberToDelete}?requester_id=${userId}`, {
+  //       method: "DELETE",
+  //     });
+  //     await fetchGroup();
+  //     onMemberRemoved(); // add this
+  //   } catch (err) {
+  //     alert("Failed to remove member.");
+  //   } finally {
+  //     setMemberToDelete(null);
+  //     setShowDeleteMemberModal(false);
+  //   }
+  // };
 
   const handleEditGroup = async () => {
     if (!editGroupName.trim()) {
@@ -262,9 +262,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
   const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
   const memberCount = group.group_members?.length || 1;
-  const yourShare = totalSpend / memberCount;
+  //const yourShare = totalSpend / memberCount;
 
-  const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
+  //const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
 
   const balanceMap: Record<string, number> = {};
 
@@ -546,17 +546,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                               {new Date(exp.created_at).toLocaleDateString()}
                             </p>
                           </div>
-                          <div className="gd-expense-actions" style={{ opacity: hoveredExpense === exp.id ? 1 : 0 }}>
-                            <button className="gd-expense-action-btn gd-action-edit">
-                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>edit</span>
-                            </button>
-                            <button
-                              className="gd-expense-action-btn gd-action-delete"
-                              onClick={() => handleDeleteExpense(exp.id)}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>delete</span>
-                            </button>
-                          </div>
                         </div>
                       </div>
                     ))}
@@ -693,7 +682,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                               )}
                             </div>
                           </div>
-                          {!isYou && (
+                          {/* {!isYou && (
                             <button
                               className="gd-member-del-btn"
                               onClick={() => { setMemberToDelete(m.user_id); setShowDeleteMemberModal(true); }}
@@ -701,7 +690,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                             >
                               <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_remove</span>
                             </button>
-                          )}
+                          )} */}
                         </div>
                       );
                     })}
@@ -839,7 +828,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
         </div>
       )}
 
-      {/* Delete Member Modal */}
+      {/* Delete Member Modal
       {showDeleteMemberModal && (
         <div className="modal-backdrop" onClick={() => setShowDeleteMemberModal(false)}>
           <div className="modal-box modal-box-sm" onClick={(e) => e.stopPropagation()}>
@@ -849,25 +838,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                 <span className="material-symbols-outlined">close</span>
               </button>
             </div>
-            <div className="modal-body">
-              <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0" }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "var(--color-error-container)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <span className="material-symbols-outlined" style={{ color: "var(--color-error)", fontSize: 22 }}>person_remove</span>
-                </div>
-                <p className="text-body-md">
-                  Remove <strong>{memberToDeleteObj ? getMemberLabel(memberToDeleteObj.user_id) : ""}</strong> from this group?
-                </p>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowDeleteMemberModal(false)}>Cancel</button>
-              <button className="btn" style={{ background: "var(--color-error)", color: "#fff" }} onClick={handleRemoveMember}>
-                Remove
-              </button>
-            </div>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* Settle Up Modal */}
       {showSettleUpModal && (
