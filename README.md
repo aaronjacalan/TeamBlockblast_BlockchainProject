@@ -1,6 +1,6 @@
 # FairShare 💜
 
-A minimalist Splitwise-like expense splitting app built on the **Cardano blockchain**.  
+A minimalist expense splitting app built on the **Cardano blockchain**.  
 
 The app allows users to:
 - Create groups
