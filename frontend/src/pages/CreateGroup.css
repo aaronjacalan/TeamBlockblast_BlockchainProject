@@ -411,6 +411,17 @@
   color: var(--color-error);
 }
 
+/* Spinner Rotate Keyframes */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+
 /* ── Info Alert ───────────────────────────────────────────────────────────── */
 .cg-info-alert {
   margin-top: 20px;

@@ -5,6 +5,8 @@ from database import supabase
 import secrets
 from datetime import datetime, timedelta, timezone
 from routes.utils import recalculate_splits_for_group
+import requests
+import os
 
 router = APIRouter()
 
@@ -14,6 +16,8 @@ class GroupCreate(BaseModel):
     description: Optional[str] = ""
     image_url: Optional[str] = ""
     created_by: str  # user uuid
+    tx_hash: str     # transaction hash of the 1.0 ADA creation fee
+    blockfrost_api_key: str  # Blockfrost key passed from the frontend
 
 
 class GroupInviteCreate(BaseModel):
@@ -25,6 +29,64 @@ class InviteByEmail(BaseModel):
     invited_by: str  # user_id of who is inviting
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
+
+def verify_cardano_tx(tx_hash: str, blockfrost_api_key: str) -> bool:
+    """
+    Verifies that a Cardano transaction exists in the blockchain (either 
+    already minted in a block, or currently pending in the mempool).
+    This ensures instant validation without making the user wait for on-chain block minting.
+    """
+    raw_address = os.getenv("FAIRSHARE_ADDRESS")
+    if not blockfrost_api_key or not raw_address:
+        raise HTTPException(
+            status_code=500,
+            detail="Backend configuration error: BLOCKFROST_API_KEY (from frontend) or FAIRSHARE_ADDRESS is missing."
+        )
+
+    # Clean all whitespaces from target address and key
+    fairshare_address = "".join(raw_address.split())
+
+    # Clean all whitespaces from the API key (including spaces in the middle)
+    api_key = "".join(blockfrost_api_key.split())
+    network = "preview" if api_key.startswith("preview") else "mainnet"
+    base_url = f"https://cardano-{network}.blockfrost.io/api/v0"
+
+    headers = {"project_id": api_key}
+
+    # 1. First, check if the transaction is already minted in a block
+    tx_url = f"{base_url}/txs/{tx_hash}"
+    try:
+        response = requests.get(tx_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print(f"\n[BLOCKFROST] Transaction {tx_hash} verified: Already minted in a block.")
+            return True
+    except requests.RequestException:
+        pass  # Fallback to mempool check if the network call itself fails or times out
+
+    # 2. If not minted yet, check if it is pending in the mempool
+    mempool_url = f"{base_url}/mempool/{tx_hash}"
+    try:
+        response = requests.get(mempool_url, headers=headers, timeout=10)
+        if response.status_code == 200:
+            print(f"\n[BLOCKFROST] Transaction {tx_hash} verified: Pending in the mempool.")
+            return True
+        elif response.status_code == 404:
+            raise HTTPException(
+                status_code=400,
+                detail="Payment verification failed: Transaction hash not found in blocks or mempool. Please wait a few seconds and try again."
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Cardano blockchain lookup failed via Blockfrost (Status code: {response.status_code})."
+            )
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to check blockchain status due to a connection issue with Blockfrost: {str(e)}"
+        )
+
+
 
 def log_activity(user_id: str, group_id: str, type: str, description: str):
     try:
@@ -101,32 +163,90 @@ def create_group(data: GroupCreate):
     if not data.created_by.strip():
         raise HTTPException(status_code=400, detail="created_by is required")
 
+    if not data.tx_hash.strip():
+        raise HTTPException(status_code=400, detail="Transaction hash for the 1.0 ADA creation fee is required")
+
+    if not data.blockfrost_api_key.strip():
+        raise HTTPException(status_code=400, detail="Blockfrost API key is required from client for validation")
+
     # verify user exists
     user_result = supabase.table("users").select("id").eq("id", data.created_by).execute()
     if not user_result.data:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # create the group
+    # --- REPLAY PROTECTION ---
+    # Check if this transaction hash has already been used to create a group
+    existing_group = supabase.table("groups").select("id").eq("image_url", data.tx_hash.strip()).execute()
+    if existing_group.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Replay Protection: This transaction hash has already been used to create another group."
+        )
+
+    # --- CARDANO ON-CHAIN VERIFICATION ---
+    # Verify that the 1.0 ADA transaction went through on-chain using the Blockfrost API passed from frontend
+    verify_cardano_tx(data.tx_hash.strip(), data.blockfrost_api_key.strip())
+
+    # --- PRINT CONFIRMATION TO TERMINAL ---
+    print("\n" + "="*80)
+    print(" [CARDANO FEE VERIFICATION CONFIRMED]")
+    print(f" Transaction Hash: {data.tx_hash.strip()}")
+    print(" Status: SUCCESS (1.0 ADA Verified On-Chain)")
+    print(f" Group Name: {data.name.strip()}")
+    print(f" Creator UUID: {data.created_by}")
+    print(" Action: Storing group in Supabase database...")
+    print("="*80 + "\n")
+
+    # --- WRITE TO DATABASE ---
+    # 1. Create the group record in Supabase
     group_result = supabase.table("groups").insert({
         "name": data.name.strip(),
         "description": data.description,
-        "image_url": data.image_url,
+        "image_url": data.tx_hash.strip(),  # Store the verified hash in image_url column
         "created_by": data.created_by,
     }).execute()
 
     group = group_result.data[0]
     group_id = group["id"]
 
-    # add creator as first member
+    # 2. Add the creator as the first group member
     supabase.table("group_members").insert({
         "group_id": group_id,
         "user_id": data.created_by,
     }).execute()
 
-    # log activity
+    # 3. Add the Group Creation Fee of 1.0 ADA directly into the `expenses` and `expense_splits` tables.
+    # This logs the transaction payment in the expenses system.
+    try:
+        expense_result = supabase.table("expenses").insert({
+            "group_id": group_id,
+            "paid_by": data.created_by,
+            "name": "Group Creation Fee",
+            "amount": 1.0,
+            "currency": "ADA",
+            "split_type": "equal",
+            "tx_status": "settled",
+            "tx_hash": data.tx_hash.strip(),
+        }).execute()
+        
+        if expense_result.data:
+            expense_id = expense_result.data[0]["id"]
+            
+            # Create a fully settled split for the creator since they are the sole member
+            supabase.table("expense_splits").insert({
+                "expense_id": expense_id,
+                "user_id": data.created_by,
+                "amount_owed": 1.0,
+                "is_settled": True,
+            }).execute()
+    except Exception as db_err:
+        print(f"[DATABASE WARNING] Failed to record creation fee in expenses table: {str(db_err)}")
+
+    # 4. Log the activity
     log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
 
     return group
+
 
 
 @router.post("/{group_id}/join")

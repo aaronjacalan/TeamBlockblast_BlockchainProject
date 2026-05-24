@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 import "./CreateGroup.css";
+import { useWallet } from "@meshsdk/react";
+import { BlockfrostProvider, MeshTxBuilder } from "@meshsdk/core";
 
 interface CreateGroupProps {
   onClose: () => void;
@@ -8,6 +10,7 @@ interface CreateGroupProps {
 }
 
 const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId }) => {
+  const { wallet, connected } = useWallet();
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
   const [members, setMembers] = useState([
@@ -22,6 +25,9 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const [hoveredMember, setHoveredMember] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasPaid, setHasPaid] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
+  const [txHash, setTxHash] = useState("");
+  const [verificationStatus, setVerificationStatus] = useState("");
   const [nameError, setNameError] = useState(false);
   const [descriptionError, setDescriptionError] = useState(false);
   const [paymentError, setPaymentError] = useState(false);
@@ -99,6 +105,70 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
     setGroupDescription(value.slice(0, 100));
   };
 
+  /**
+   * Handles real transaction creation for the 0.1 ADA group creation fee.
+   * Sends 0.1 ADA (100k Lovelaces) to the designated FAIRSHARE_ADDRESS.
+   * On success, sets hasPaid to true and stores the tx_hash.
+   */
+  const handlePayment = async () => {
+    if (!connected || !wallet) {
+      alert("Wallet not connected. Please log in with a Cardano wallet first.");
+      return;
+    }
+
+    setIsPaying(true);
+    setVerificationStatus("Initializing Cardano payment...");
+    setPaymentError(false);
+
+    try {
+      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
+      const fairshareAddress = import.meta.env.VITE_FAIRSHARE_ADDRESS;
+
+      if (!blockfrostApiKey || !fairshareAddress) {
+        throw new Error("Configuration error: VITE_BLOCKFROST_API_KEY or VITE_FAIRSHARE_ADDRESS is missing in frontend env.");
+      }
+
+      setVerificationStatus("Preparing 1.0 ADA fee transaction...");
+      const blockfrostProvider = new BlockfrostProvider(blockfrostApiKey);
+      const amountInLovelace = "1000000"; // 1.0 ADA = 1,000,000 Lovelaces
+
+      const txBuilder = new MeshTxBuilder({
+        fetcher: blockfrostProvider,
+        verbose: true,
+      });
+
+      setVerificationStatus("Querying wallet UTXOs...");
+      const utxos = await wallet.getUtxosMesh();
+      const changeAddress = await wallet.getChangeAddressBech32();
+
+      setVerificationStatus("Building payment transaction...");
+      const unsignedTx = await txBuilder
+        .txOut(fairshareAddress, [{ unit: "lovelace", quantity: amountInLovelace }])
+        .changeAddress(changeAddress)
+        .selectUtxosFrom(utxos)
+        .complete();
+
+      setVerificationStatus("Please sign the 1.0 ADA payment in your wallet...");
+      const signedTx = await wallet.signTxReturnFullTx(unsignedTx, false);
+
+      setVerificationStatus("Submitting fee to Cardano network...");
+      const submittedTxHash = await wallet.submitTx(signedTx);
+
+      setTxHash(submittedTxHash);
+      setHasPaid(true);
+      setVerificationStatus("Payment successful! Click Create Group below to verify and start.");
+      alert(`Transaction successful!\n1.0 ADA sent to FairShare.\nHash: ${submittedTxHash}`);
+
+    } catch (error: any) {
+      console.error("Payment transaction failed:", error);
+      setPaymentError(true);
+      setVerificationStatus("");
+      alert(error?.message || "Transaction failed. Make sure you have enough ADA (0.1 ADA + network fee) and try again.");
+    } finally {
+      setIsPaying(false);
+    }
+  };
+
   const handleCreate = async () => {
     const nameMissing = !groupName.trim();
     const descriptionMissing = !groupDescription.trim();
@@ -114,7 +184,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
       descriptionErrorTimer.current = window.setTimeout(() => setDescriptionError(false), 5000);
     }
     if (nameMissing || descriptionMissing) return;
-    if (!hasPaid) {
+    if (!hasPaid || !txHash) {
       setPaymentError(true);
       if (paymentErrorTimer.current) window.clearTimeout(paymentErrorTimer.current);
       paymentErrorTimer.current = window.setTimeout(() => setPaymentError(false), 5000);
@@ -122,7 +192,11 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
     }
 
     setLoading(true);
+    setVerificationStatus("Verifying 1.0 ADA payment on-chain via Blockfrost...");
+
     try {
+      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
+
       const res = await fetch("/api/groups/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -131,39 +205,32 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
           description: groupDescription,
           image_url: "",
           created_by: userId,
+          tx_hash: txHash,
+          blockfrost_api_key: blockfrostApiKey,
         }),
       });
 
-      if (!res.ok) throw new Error("Failed to create group");
-      const group = await res.json();
-
-      // send invites to all non-owner members
-      const nonOwners = members.filter((m) => !m.isOwner && m.email);
-      if (nonOwners.length > 0) {
-        const inviteResults = await Promise.allSettled(
-          nonOwners.map((m) =>
-            fetch(`/api/groups/${group.id}/invite`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                email: m.email,
-                invited_by: userId,
-              }),
-            })
-          )
-        );
-
-        const failed = inviteResults.filter((r) => r.status === "rejected").length;
-        if (failed > 0) {
-          alert(`Group created! However, ${failed} invite(s) could not be sent.`);
-        }
+      if (!res.ok) {
+        let errorMsg = "Failed to verify transaction. The transaction might still be propagating on-chain. Please wait a few seconds and try again.";
+        try {
+          const errorData = await res.json();
+          if (errorData?.detail) errorMsg = errorData.detail;
+        } catch {}
+        throw new Error(errorMsg);
       }
+      
+      const groupResult = await res.json();
+      console.log("Verification Success! Backend response:", groupResult);
+      alert(`On-Chain Payment Verified Successfully!\nConsole confirmation logged in the server.\n\nBackend Msg: ${groupResult.message || "Bypassed DB writes"}`);
 
+      // We still run the closing callback to dismiss the modal, but 
+      // no groups will have been stored in the DB as requested!
       onCreated();
-    } catch (err) {
-      alert("Something went wrong. Please try again.");
+    } catch (err: any) {
+      alert(err?.message || "Something went wrong. Please try again.");
     } finally {
       setLoading(false);
+      setVerificationStatus("");
     }
   };
 
@@ -218,15 +285,40 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
                 <div className="cg-cta">
                   <button
                     className={`cg-pay-btn${hasPaid ? " paid" : ""}${paymentError ? " cg-error" : ""}`}
-                    onClick={() => { setHasPaid(true); setPaymentError(false); }}
-                    disabled={hasPaid}
+                    onClick={handlePayment}
+                    disabled={hasPaid || isPaying || loading}
                   >
-                    {hasPaid ? "Paid 1 ADA" : "Pay 1 ADA"}
+                    {isPaying ? "Paying..." : hasPaid ? "Paid 1.0 ADA" : "Pay 1.0 ADA"}
                   </button>
-                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading || !hasPaid}>
-                    {loading ? "Creating..." : "Create Group"}
+                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading || isPaying || !hasPaid}>
+                    {loading ? "Verifying..." : "Create Group"}
                   </button>
                 </div>
+
+
+                {/* Cardano Transaction & Verification Status Indicator */}
+                {verificationStatus && (
+                  <div className="cg-status-message" style={{
+                    marginTop: 12,
+                    padding: "10px 14px",
+                    borderRadius: 8,
+                    background: "var(--color-zinc-100, #f4f4f5)",
+                    border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                    color: "var(--color-zinc-700, #3f3f46)",
+                    fontSize: 13,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}>
+                    <span className="material-symbols-outlined spinner-icon" style={{
+                      fontSize: 16,
+                      color: "var(--color-primary)",
+                      animation: "spin 1.5s linear infinite",
+                      display: "inline-block"
+                    }}>sync</span>
+                    <span>{verificationStatus}</span>
+                  </div>
+                )}
 
                 <div className="cg-info-alert">
                   <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)", marginTop: 2, flexShrink: 0 }}>

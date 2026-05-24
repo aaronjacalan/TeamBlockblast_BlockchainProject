@@ -342,6 +342,11 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       return;
     }
 
+    if (parseFloat(settleUpAmount) < 1.0) {
+      alert("Cardano requires a minimum on-chain payment of 1.0 ADA due to min-UTXO ledger protocol constraints.");
+      return;
+    }
+
     try {
       setIsSubmitting(true);
 
@@ -934,6 +939,28 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   </p>
                 </div>
               )}
+
+              {/* Cardano min-UTXO warning alert for balances below 1.0 ADA */}
+              {settleUpMemberId && settleUpAddress && parseFloat(settleUpAmount) < 1.0 && (
+                <div style={{
+                  marginTop: 12,
+                  padding: "12px 14px",
+                  borderRadius: 10,
+                  background: "var(--color-error-light, #fef2f2)",
+                  border: "1px solid var(--color-error-border, #fca5a5)",
+                  color: "var(--color-error, #dc2626)",
+                  fontSize: 13,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--color-error)" }}>warning</span>
+                  <span>
+                    <strong>Cardano min-UTXO limit:</strong> On-chain payments must be at least <strong>1.0 ADA</strong>. Please let your balance accumulate or settle off-chain.
+                  </span>
+                </div>
+              )}
+
             </div>
 
             <div className="modal-footer">
@@ -943,10 +970,17 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               <button
                 className="btn btn-dark"
                 onClick={submitSettleUp}
-                disabled={isSubmitting || !settleUpMemberId || !settleUpAddress || !settleUpAmount}
+                disabled={
+                  isSubmitting || 
+                  !settleUpMemberId || 
+                  !settleUpAddress || 
+                  !settleUpAmount || 
+                  parseFloat(settleUpAmount) < 1.0
+                }
               >
                 {isSubmitting ? "Processing..." : "Sign & Send"}
               </button>
+
             </div>
           </div>
         </div>
