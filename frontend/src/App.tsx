@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useWallet } from "@meshsdk/react";
+import { MeshCardanoBrowserWallet } from "@meshsdk/wallet";
 import Header from "./components/Header";
 import Footer from "./components/Footer";
 import Landing from "./pages/Landing";
@@ -20,6 +22,7 @@ type Page =
   | "settings";
 
 const App: React.FC = () => {
+  const { setWallet } = useWallet();
   const [currentPage, setCurrentPage] = useState<Page>("landing");
   const [userId, setUserId] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
@@ -33,6 +36,40 @@ const App: React.FC = () => {
 
   const isLoggedIn = Boolean(walletAddress);
   const [summary, setSummary] = useState({ you_are_owed: 0, you_owe: 0 });
+
+  // Restore session from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem("fairshare_session");
+    if (stored) {
+      try {
+        const { user, walletName } = JSON.parse(stored);
+        if (user && user.id && user.stake_address) {
+          setUserId(user.id);
+          setWalletAddress(user.stake_address);
+          setDisplayName(user.display_name || "");
+          setEmail(user.email || "");
+
+          fetchGroups(user.id);
+          fetchActivities(user.id);
+          fetchSummary(user.id);
+
+          setCurrentPage("dashboard");
+
+          if (walletName) {
+            MeshCardanoBrowserWallet.enable(walletName)
+              .then((wallet) => {
+                setWallet(wallet, walletName);
+              })
+              .catch((err) => {
+                console.error("Failed to auto-reconnect wallet:", err);
+              });
+          }
+        }
+      } catch (err) {
+        console.error("Failed to restore session:", err);
+      }
+    }
+  }, []);
 
   const fetchSummary = async (id: string) => {
     try {
@@ -84,6 +121,7 @@ const App: React.FC = () => {
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("fairshare_session");
     setWalletAddress("");
     setUserId("");
     setDisplayName("");
@@ -145,12 +183,25 @@ const App: React.FC = () => {
 
       {currentPage === "login" && (
        <Login
-        onLogin={async (user: any) => {
+        onLogin={async (user: any, walletName: string) => {
           setUserId(user.id);
           setWalletAddress(user.stake_address);
 
           setDisplayName(user.display_name || "");
           setEmail(user.email || "");
+
+          localStorage.setItem(
+            "fairshare_session",
+            JSON.stringify({
+              user: {
+                id: user.id,
+                stake_address: user.stake_address,
+                display_name: user.display_name || "",
+                email: user.email || "",
+              },
+              walletName,
+            })
+          );
 
           await fetchGroups(user.id);
           await fetchActivities(user.id);
@@ -213,6 +264,21 @@ const App: React.FC = () => {
           displayName={displayName}
           email={email}
           onNavigate={navigate}
+          onProfileUpdate={(newDisplayName, newEmail) => {
+            setDisplayName(newDisplayName);
+            setEmail(newEmail);
+            const stored = localStorage.getItem("fairshare_session");
+            if (stored) {
+              try {
+                const session = JSON.parse(stored);
+                session.user.display_name = newDisplayName;
+                session.user.email = newEmail;
+                localStorage.setItem("fairshare_session", JSON.stringify(session));
+              } catch (e) {
+                console.error("Failed to update stored session:", e);
+              }
+            }
+          }}
         />
       )}
 

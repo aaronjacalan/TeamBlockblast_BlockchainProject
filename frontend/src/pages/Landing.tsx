@@ -115,7 +115,7 @@ const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
 
   const stats = [
     { value: "ADA", label: "Powered by Cardano" },
-    { value: "0%", label: "Platform fees" },
+    { value: "Small", label: "Platform fees" },
     { value: "100%", label: "Transparent ledger" },
     { value: "Web3", label: "Native & trustless" },
   ];

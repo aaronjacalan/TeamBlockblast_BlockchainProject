@@ -8,6 +8,7 @@ interface SettingsProps {
   displayName: string;
   email: string;
   onNavigate: (page: Page) => void;
+  onProfileUpdate: (displayName: string, email: string) => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({
@@ -16,6 +17,7 @@ const Settings: React.FC<SettingsProps> = ({
   displayName: initialDisplayName,
   email: initialEmail,
   onNavigate,
+  onProfileUpdate,
 }) => {
   const [email, setEmail] = useState(initialEmail);
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -33,6 +35,7 @@ const Settings: React.FC<SettingsProps> = ({
       });
       if (!res.ok) throw new Error("Failed to save");
       setSaved(true);
+      onProfileUpdate(displayName.trim(), email.trim());
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
       alert("Failed to save email. Please try again.");

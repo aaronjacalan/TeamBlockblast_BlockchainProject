@@ -4,7 +4,7 @@ import { useWallet } from "@meshsdk/react";
 import "./Login.css";
 
 interface LoginProps {
-  onLogin: (user: object) => void;
+  onLogin: (user: any, walletName: string) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
@@ -75,7 +75,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       // if user already has display name and email, skip profile step
     if (user.display_name && user.email) {
-      onLogin(user);
+      onLogin(user, selectedWallet);
     } else {
       setPendingUser(user);
       setStep("profile");
@@ -127,7 +127,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       if (!res.ok) throw new Error("Failed to save profile");
       const updatedUser = await res.json();
 
-      onLogin(updatedUser);
+      onLogin(updatedUser, selectedWallet);
     } catch (error) {
       console.error("Error saving profile:", error);
       alert("Failed to save profile. Please try again.");
