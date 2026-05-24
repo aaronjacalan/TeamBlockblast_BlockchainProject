@@ -72,6 +72,7 @@ interface Group {
   image_url: string;
   created_by: string;
   created_at: string;
+  status: string;
   group_members: Member[];
 }
 
@@ -79,11 +80,10 @@ interface GroupDetailsProps {
   groupId: string;
   userId: string;
   onExpenseAdded: () => void;
-  //onExpenseDeleted: () => void;
-  //onMemberRemoved: () => void;
+  onGroupStatusChanged: () => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded}) => {
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onGroupStatusChanged }) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -117,22 +117,29 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const [showAddMemberModal, setShowAddMemberModal] = useState(false);
   const [newMemberEmail, setNewMemberEmail] = useState("");
 
-  // Delete Member Modal
-  const [showDeleteMemberModal, setShowDeleteMemberModal] = useState(false);
-  const [memberToDelete, setMemberToDelete] = useState<string | null>(null);
+  const [settleAgreements, setSettleAgreements] = useState<string[]>([]);
+  const [groupStatus, setGroupStatus] = useState("active");
+
+  const fetchSettleAgreements = async () => {
+    const res = await fetch(`/api/groups/${groupId}/settle-agreement`);
+    const data = await res.json();
+    setSettleAgreements(data.map((a: any) => a.user_id));
+  };
+
+  useEffect(() => {
+    if (group) {
+      setGroupStatus(group.status || "active");
+      setEditGroupName(group.name || "");
+      setEditGroupDescription(group.description || "");
+    }
+  }, [group]);
 
   useEffect(() => {
     fetchGroup();
     fetchExpenses();
     fetchSettlements();
+    fetchSettleAgreements();
   }, [groupId]);
-
-  useEffect(() => {
-    if (group) {
-      setEditGroupName(group.name || "");
-      setEditGroupDescription(group.description || "");
-    }
-  }, [group]);
 
   const fetchSettlements = async () => {
       try {
@@ -201,32 +208,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     }
   };
 
-  // const handleDeleteExpense = async (expenseId: string) => {
-  //   try {
-  //     await fetch(`/api/expenses/${expenseId}`, { method: "DELETE" });
-  //     setExpenses((prev) => prev.filter((e) => e.id !== expenseId));
-  //     onExpenseDeleted(); // add this
-  //   } catch (err) {
-  //     alert("Failed to delete expense.");
-  //   }
-  // };
-
-  // const handleRemoveMember = async () => {
-  //   if (!memberToDelete) return;
-  //   try {
-  //     await fetch(`/api/groups/${groupId}/members/${memberToDelete}?requester_id=${userId}`, {
-  //       method: "DELETE",
-  //     });
-  //     await fetchGroup();
-  //     onMemberRemoved(); // add this
-  //   } catch (err) {
-  //     alert("Failed to remove member.");
-  //   } finally {
-  //     setMemberToDelete(null);
-  //     setShowDeleteMemberModal(false);
-  //   }
-  // };
-
   const handleEditGroup = async () => {
     if (!editGroupName.trim()) {
       alert("Group name is required");
@@ -259,13 +240,10 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   if (!group) return <main className="group-details page-offset"><div className="container">Group not found.</div></main>;
 
   // calculate stats from real expenses
+  const isSettled = groupStatus === "settled";
   const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
   const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
   const memberCount = group.group_members?.length || 1;
-  //const yourShare = totalSpend / memberCount;
-
-  //const memberToDeleteObj = group.group_members?.find((m) => m.user_id === memberToDelete);
-
   const balanceMap: Record<string, number> = {};
 
   group.group_members?.forEach((m) => {
@@ -426,22 +404,44 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               </div>
 
               <div className="gd-header-actions">
-                <button className="btn btn-secondary" onClick={() => setShowEditGroupModal(true)}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
-                  Edit Group
-                </button>
-                <button className="btn btn-secondary" onClick={() => {
-                    setShowSettleUpModal(true);
-                  }}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
-                  Settle Up
-                </button>
-                <button className="btn btn-dark" onClick={() => setShowExpenseModal(true)}>
-                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
-                  Add Expense
-                </button>
+                {!isSettled && (
+                  <>
+                    <button className="btn btn-secondary" onClick={() => setShowEditGroupModal(true)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
+                      Edit Group
+                    </button>
+                    <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
+                      Settle Up
+                    </button>
+                    <button className="btn btn-dark" onClick={() => setShowExpenseModal(true)}>
+                      <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
+                      Add Expense
+                    </button>
+                  </>
+                )}
               </div>
             </div>
+
+            
+            {isSettled && (
+              <div style={{
+                background: "var(--color-tertiary-light, #f0fdf4)",
+                border: "1px solid var(--color-tertiary)",
+                borderRadius: 10,
+                padding: "12px 16px",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                marginBottom: 16,
+                color: "var(--color-tertiary)",
+                fontSize: 14,
+                fontWeight: 600,
+              }}>
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: '"FILL" 1' }}>check_circle</span>
+                This group has been fully settled — no further changes allowed.
+              </div>
+            )}
             
             {/* Summary Stats */}
             <div className="gd-stats">
@@ -675,25 +675,49 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                               )}
                             </div>
                           </div>
-                          {/* {!isYou && (
-                            <button
-                              className="gd-member-del-btn"
-                              onClick={() => { setMemberToDelete(m.user_id); setShowDeleteMemberModal(true); }}
-                              style={{ opacity: 0, transition: "opacity 0.15s", background: "none", border: "none", cursor: "pointer", padding: 2, color: "var(--color-error)" }}
-                            >
-                              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>person_remove</span>
-                            </button>
-                          )} */}
                         </div>
                       );
                     })}
                   </div>
 
                   <div className="gd-member-actions">
-                    <button className="gd-invite-btn" onClick={() => setShowAddMemberModal(true)}>
-                      <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person_add</span>
-                      Invite Member
-                    </button>
+                    {!isSettled && (
+                      <button className="gd-invite-btn" onClick={() => setShowAddMemberModal(true)}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person_add</span>
+                        Invite Member
+                      </button>
+                    )}
+                  </div>
+                  <div style={{ marginTop: 16, padding: "12px 0", borderTop: "1px solid var(--color-zinc-100)" }}>
+                    <p className="text-label-sm" style={{ color: "var(--color-zinc-500)", marginBottom: 8 }}>
+                      Settle Group
+                    </p>
+                    <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer" }}>
+                      <input
+                        type="checkbox"
+                        checked={settleAgreements.includes(userId)}
+                        disabled={isSettled}
+                        onChange={async () => {
+                          const res = await fetch(`/api/groups/${groupId}/settle-agreement?user_id=${userId}`, {
+                            method: "POST",
+                          });
+                          const data = await res.json();
+                          setGroupStatus(data.group_status);
+                          await fetchSettleAgreements();
+                          await onGroupStatusChanged();
+                        }}
+                        style={{ width: 16, height: 16, cursor: "pointer" }}
+                      />
+                      <span style={{ fontSize: 13, color: "var(--color-on-surface)" }}>
+                        I agree to settle this group
+                      </span>
+                    </label>
+                    <p style={{ fontSize: 11, color: "var(--color-zinc-400)", marginTop: 6 }}>
+                      {settleAgreements.length} of {group.group_members?.length || 0} members agreed
+                      {groupStatus === "settled" && (
+                        <span style={{ color: "var(--color-tertiary)", fontWeight: 600, marginLeft: 4 }}>· Group Settled ✓</span>
+                      )}
+                    </p>
                   </div>
                 </div>
               </aside>

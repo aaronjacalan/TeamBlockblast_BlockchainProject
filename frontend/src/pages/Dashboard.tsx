@@ -118,7 +118,7 @@ const Dashboard: React.FC<DashboardProps> = ({
             </div>
 
             <div className="db-groups-grid">
-              {groups.map((g) => (
+              {groups.filter(g => g.status !== "settled").map((g) => (
                 <button
                   key={g.id}
                   className="db-group-card card card-p"

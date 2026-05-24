@@ -12,8 +12,8 @@ interface GroupsProps {
 
 const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups }) => {
   const [query, setQuery] = useState("");
-
-  const settledGroups: any[] = [];
+  const activeGroups = groups.filter(g => g.status !== "settled");
+  const settledGroups = groups.filter(g => g.status === "settled");
 
   return (
     <main className="groups page-offset">
@@ -55,11 +55,11 @@ const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups })
         <section className="groups-section">
           <div className="groups-section-title">
             <h2 className="text-headline-sm">Active Groups</h2>
-            <span className="groups-chip groups-chip-purple">{groups.length} Active</span>
+            <span className="groups-chip groups-chip-purple">{activeGroups.length} Active</span>
           </div>
 
           <div className="groups-grid">
-            {groups
+            {activeGroups
               .filter((g) => g.name.toLowerCase().includes(query.toLowerCase()))
               .map((g) => (
                 <button
@@ -110,7 +110,7 @@ const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups })
                     <div>
                       <h4 className="text-body-lg">{g.name}</h4>
                       <p className="text-label-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-                        {g.meta}
+                        {g.group_members?.length || 0} members · Settled {new Date(g.created_at).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -121,7 +121,7 @@ const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups })
                       </span>
                       Fully Settled
                     </span>
-                    <button className="groups-chevron">
+                    <button className="groups-chevron" onClick={() => onSelectGroup(g.id)}>
                       <span className="material-symbols-outlined">chevron_right</span>
                     </button>
                   </div>

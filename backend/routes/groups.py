@@ -466,3 +466,49 @@ def respond_to_invite(group_id: str, data: InviteResponse):
     }).execute()
 
     return {"message": f"Invite {verb}"}
+
+@router.post("/{group_id}/settle-agreement")
+def toggle_settle_agreement(group_id: str, user_id: str):
+    # check if user already agreed
+    existing = (
+        supabase.table("group_settlements")
+        .select("id")
+        .eq("group_id", group_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+
+    if existing.data:
+        # uncheck — remove agreement
+        supabase.table("group_settlements").delete().eq("group_id", group_id).eq("user_id", user_id).execute()
+        agreed = False
+    else:
+        # check — add agreement
+        supabase.table("group_settlements").insert({
+            "group_id": group_id,
+            "user_id": user_id,
+        }).execute()
+        agreed = True
+
+    # check if ALL members have agreed
+    members = supabase.table("group_members").select("user_id").eq("group_id", group_id).execute()
+    agreements = supabase.table("group_settlements").select("user_id").eq("group_id", group_id).execute()
+
+    member_ids = set(m["user_id"] for m in members.data)
+    agreed_ids = set(a["user_id"] for a in agreements.data)
+
+    if member_ids == agreed_ids and len(member_ids) > 0:
+        # everyone agreed — mark group as settled
+        supabase.table("groups").update({"status": "settled"}).eq("id", group_id).execute()
+        log_activity(user_id, group_id, "group_settled", "All members agreed to settle the group")
+        return {"agreed": agreed, "group_status": "settled"}
+    else:
+        # revert to active if someone unchecked
+        supabase.table("groups").update({"status": "active"}).eq("id", group_id).execute()
+        return {"agreed": agreed, "group_status": "active", "waiting_for": len(member_ids - agreed_ids)}
+
+
+@router.get("/{group_id}/settle-agreement")
+def get_settle_agreements(group_id: str):
+    result = supabase.table("group_settlements").select("user_id, agreed_at").eq("group_id", group_id).execute()
+    return result.data
