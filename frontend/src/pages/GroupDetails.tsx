@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useWallet } from "@meshsdk/react";
-import { BlockfrostProvider, MeshTxBuilder } from "@meshsdk/core";
+import { MeshTxBuilder } from "@meshsdk/core";
+import { BackendProxyFetcher } from "../utils/customFetcher";
 import "./GroupDetails.css";
 
 interface Member {
@@ -81,16 +82,24 @@ interface GroupDetailsProps {
   userId: string;
   onExpenseAdded: () => void;
   onGroupStatusChanged: () => void;
+  onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
-const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onGroupStatusChanged }) => {
+const sha256 = async (message: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseAdded, onGroupStatusChanged, onShowToast }) => {
   const { wallet } = useWallet();
   const [group, setGroup] = useState<Group | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [hoveredExpense, setHoveredExpense] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"expenses" | "transactions">("expenses");
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [loadingVerification, setLoadingVerification] = useState(false);
 
   // Settle Up Modal
   const [showSettleUpModal, setShowSettleUpModal] = useState(false);
@@ -166,6 +175,28 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
     }
   };
 
+  const handleManualVerify = async () => {
+    setLoadingVerification(true);
+    onShowToast("Checking on-chain transaction status...", "info");
+    try {
+      const res = await fetch(`/api/groups/${groupId}/verify`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (res.ok) {
+        onShowToast("Payment verified! Group is now active.", "success");
+        await fetchGroup();
+        onGroupStatusChanged();
+      } else {
+        onShowToast(data.detail || "Transaction still propagating on-chain. Please wait.", "warning");
+      }
+    } catch (err: any) {
+      onShowToast(err?.message || "Failed to contact backend for verification.", "error");
+    } finally {
+      setLoadingVerification(false);
+    }
+  };
+
   const fetchExpenses = async () => {
     try {
       const res = await fetch(`/api/expenses/?group_id=${groupId}`);
@@ -197,12 +228,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       if (!res.ok) throw new Error("Failed to add expense");
       await fetchExpenses();
       onExpenseAdded(); 
+      onShowToast("Expense added successfully!", "success");
       setExpenseName("");
       setExpenseAmount("");
       setExpensePaidBy(userId);
       setShowExpenseModal(false);
     } catch (err) {
-      alert("Failed to add expense. Please try again.");
+      onShowToast("Failed to add expense. Please try again.", "error");
     } finally {
       setExpenseLoading(false);
     }
@@ -210,7 +242,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
   const handleEditGroup = async () => {
     if (!editGroupName.trim()) {
-      alert("Group name is required");
+      onShowToast("Group name is required.", "warning");
       return;
     }
 
@@ -229,8 +261,9 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       const data = await res.json();
       setGroup(data);
       setShowEditGroupModal(false);
+      onShowToast("Group details updated successfully!", "success");
     } catch (err) {
-      alert("Failed to update group.");
+      onShowToast("Failed to update group.", "error");
     } finally {
       setEditGroupLoading(false);
     }
@@ -243,7 +276,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
   const isSettled = groupStatus === "settled";
   const totalSpend = expenses.reduce((sum, e) => sum + e.amount, 0);
   const youPaid = expenses.filter(e => e.paid_by === userId).reduce((sum, e) => sum + e.amount, 0);
-  const memberCount = group.group_members?.length || 1;
   const balanceMap: Record<string, number> = {};
 
   group.group_members?.forEach((m) => {
@@ -312,41 +344,51 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
   const submitSettleUp = async () => {
     if (!wallet) {
-      alert("Wallet not available. Please refresh and try again.");
+      onShowToast("Wallet not available. Please refresh and try again.", "error");
       return;
     }
     if (!settleUpAddress || !settleUpAmount) {
-      alert("Please enter a valid address and amount.");
+      onShowToast("Please enter a valid address and amount.", "warning");
       return;
     }
 
     if (parseFloat(settleUpAmount) < 1.0) {
-      alert("Cardano requires a minimum on-chain payment of 1.0 ADA due to min-UTXO ledger protocol constraints.");
+      onShowToast("Cardano requires a minimum on-chain payment of 1.0 ADA due to min-UTXO ledger constraints.", "warning");
       return;
     }
 
     try {
       setIsSubmitting(true);
 
-      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
-      if (!blockfrostApiKey) {
-        alert("Blockfrost API Key is missing in environment variables.");
-        return;
-      }
-
-      const blockfrostProvider = new BlockfrostProvider(blockfrostApiKey);
+      const secureFetcher = new BackendProxyFetcher();
       const amountInLovelace = Math.floor(parseFloat(settleUpAmount) * 1000000).toString();
 
       const txBuilder = new MeshTxBuilder({
-        fetcher: blockfrostProvider,
+        fetcher: secureFetcher as any,
         verbose: true,
       });
 
       const utxos = await wallet.getUtxosMesh();
       const changeAddress = await wallet.getChangeAddressBech32();
 
+      // Generate secure hashes to preserve privacy on the public blockchain
+      const senderHash = await sha256(userId);
+      const recipientHash = await sha256(settleUpMemberId);
+      const groupHash = await sha256(groupId);
+      const timestamp = new Date().toISOString();
+
       const unsignedTx = await txBuilder
         .txOut(settleUpAddress, [{ unit: "lovelace", quantity: amountInLovelace }])
+        .metadataValue(674, {
+          msg: [`FairShare: Settle Up ${settleUpAmount} ADA`]
+        })
+        .metadataValue(1999, {
+          action: "Settle Up",
+          time: timestamp,
+          sender: senderHash,
+          recipient: recipientHash,
+          group: groupHash
+        })
         .changeAddress(changeAddress)
         .selectUtxosFrom(utxos)
         .complete();
@@ -365,15 +407,13 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
           tx_hash: txHash,
         }),
       });
-      console.log("settle status:", settleRes.status);
-      const settleData = await settleRes.json();
-      console.log("settle response:", settleData);
+      await settleRes.json();
 
       await fetchExpenses();
       await fetchSettlements();
       onExpenseAdded();
 
-      alert(`Transaction successful!\nHash: ${txHash}`);
+      onShowToast(`Transaction successful! Hash: ${txHash.slice(0, 12)}...`, "success");
       setShowSettleUpModal(false);
       setSettleUpMemberId("");
       setSettleUpAddress("");
@@ -381,7 +421,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
       setSettleUpMemberId("");
     } catch (error) {
       console.error("Transaction failed:", error);
-      alert("Transaction failed. See console for details.");
+      onShowToast("Transaction failed. See console for details.", "error");
     } finally {
       setIsSubmitting(false);
     }
@@ -406,15 +446,32 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
               <div className="gd-header-actions">
                 {!isSettled && (
                   <>
-                    <button className="btn btn-secondary" onClick={() => setShowEditGroupModal(true)}>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => {
+                        if (group.status !== "active") {
+                          onShowToast("Please wait until the group fee is verified on-chain to edit.", "warning");
+                          return;
+                        }
+                        setShowEditGroupModal(true);
+                      }}
+                    >
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>edit</span>
                       Edit Group
                     </button>
-                    <button className="btn btn-secondary" onClick={() => setShowSettleUpModal(true)}>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={group.status !== "active"}
+                      onClick={() => setShowSettleUpModal(true)}
+                    >
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>payments</span>
                       Settle Up
                     </button>
-                    <button className="btn btn-dark" onClick={() => setShowExpenseModal(true)}>
+                    <button
+                      className="btn btn-dark"
+                      disabled={group.status !== "active"}
+                      onClick={() => setShowExpenseModal(true)}
+                    >
                       <span className="material-symbols-outlined" style={{ fontSize: 18 }}>add</span>
                       Add Expense
                     </button>
@@ -424,6 +481,94 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
             </div>
 
             
+            {group.status === "inactive" && (
+              <div style={{
+                background: "rgba(245, 158, 11, 0.08)",
+                border: "1px solid rgba(245, 158, 11, 0.4)",
+                borderRadius: 12,
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                marginBottom: 20,
+                color: "#d97706",
+                fontSize: 14,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.03)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="material-symbols-outlined spinner-icon" style={{ fontSize: 24, animation: "spin 1.5s linear infinite", fontVariationSettings: '"FILL" 1' }}>sync</span>
+                  <div>
+                    <strong style={{ fontWeight: 600, display: "block", marginBottom: 2 }}>⚡ On-Chain Verification in Progress</strong>
+                    <span>We are verifying your 1.0 ADA group creation fee on-chain. This group is currently read-only. (Hash: {group.image_url})</span>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  disabled={loadingVerification}
+                  onClick={handleManualVerify}
+                  style={{
+                    background: "#fff",
+                    border: "1px solid rgba(245, 158, 11, 0.3)",
+                    color: "#d97706",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 16px",
+                    fontWeight: 600
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
+                  {loadingVerification ? "Verifying..." : "Refresh Status"}
+                </button>
+              </div>
+            )}
+
+            {group.status === "payment_failed" && (
+              <div style={{
+                background: "rgba(239, 68, 68, 0.08)",
+                border: "1px solid rgba(239, 68, 68, 0.4)",
+                borderRadius: 12,
+                padding: "16px 20px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 16,
+                marginBottom: 20,
+                color: "#dc2626",
+                fontSize: 14,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.03)"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 24, color: "#dc2626" }}>error</span>
+                  <div>
+                    <strong style={{ fontWeight: 600, display: "block", marginBottom: 2 }}>🚨 Payment Verification Failed</strong>
+                    <span>We were unable to confirm the 1.0 ADA fee on-chain. Please verify the transaction or try again. (Hash: {group.image_url})</span>
+                  </div>
+                </div>
+                <button
+                  className="btn btn-secondary"
+                  disabled={loadingVerification}
+                  onClick={handleManualVerify}
+                  style={{
+                    background: "#fff",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    color: "#dc2626",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "8px 16px",
+                    fontWeight: 600
+                  }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 18 }}>refresh</span>
+                  {loadingVerification ? "Verifying..." : "Retry Verification"}
+                </button>
+              </div>
+            )}
+
             {isSettled && (
               <div style={{
                 background: "var(--color-tertiary-light, #f0fdf4)",
@@ -520,8 +665,6 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                       <div
                         key={exp.id}
                         className="gd-expense-row card card-p"
-                        onMouseEnter={() => setHoveredExpense(exp.id)}
-                        onMouseLeave={() => setHoveredExpense(null)}
                       >
                         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
                           <div className="gd-expense-icon">
@@ -682,7 +825,11 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
 
                   <div className="gd-member-actions">
                     {!isSettled && (
-                      <button className="gd-invite-btn" onClick={() => setShowAddMemberModal(true)}>
+                      <button
+                        className="gd-invite-btn"
+                        disabled={group.status !== "active"}
+                        onClick={() => setShowAddMemberModal(true)}
+                      >
                         <span className="material-symbols-outlined" style={{ fontSize: 14 }}>person_add</span>
                         Invite Member
                       </button>
@@ -696,7 +843,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                       <input
                         type="checkbox"
                         checked={settleAgreements.includes(userId)}
-                        disabled={isSettled}
+                        disabled={isSettled || group.status !== "active"}
                         onChange={async () => {
                           const res = await fetch(`/api/groups/${groupId}/settle-agreement?user_id=${userId}`, {
                             method: "POST",
@@ -828,14 +975,14 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
                   });
                   if (!res.ok) {
                     const err = await res.json();
-                    alert(err.detail);
+                    onShowToast(err.detail || "Failed to send invite.", "error");
                     return;
                   }
-                  alert("Invite sent!");
+                  onShowToast("Group invitation sent successfully!", "success");
                   setNewMemberEmail("");
                   setShowAddMemberModal(false);
                 } catch (err) {
-                  alert("Failed to send invite.");
+                  onShowToast("Failed to send invite. Please try again.", "error");
                 }
               }}>
                 Send Invite

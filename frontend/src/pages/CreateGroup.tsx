@@ -1,15 +1,24 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import "./CreateGroup.css";
 import { useWallet } from "@meshsdk/react";
-import { BlockfrostProvider, MeshTxBuilder } from "@meshsdk/core";
+import { MeshTxBuilder } from "@meshsdk/core";
+import { BackendProxyFetcher } from "../utils/customFetcher";
 
 interface CreateGroupProps {
   onClose: () => void;
   onCreated: () => void;
   userId: string;
+  onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
-const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId }) => {
+const sha256 = async (message: string): Promise<string> => {
+  const msgBuffer = new TextEncoder().encode(message);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+};
+
+const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, onShowToast }) => {
   const { wallet, connected } = useWallet();
   const [groupName, setGroupName] = useState("");
   const [groupDescription, setGroupDescription] = useState("");
@@ -35,6 +44,26 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   const descriptionErrorTimer = useRef<number | null>(null);
   const paymentErrorTimer = useRef<number | null>(null);
 
+  // Load draft on mount
+  useEffect(() => {
+    const draftStr = localStorage.getItem(`fairshare_pending_group_fee_${userId}`);
+    if (draftStr) {
+      try {
+        const draft = JSON.parse(draftStr);
+        if (draft && draft.txHash) {
+          setGroupName(draft.groupName || "");
+          setGroupDescription(draft.groupDescription || "");
+          setTxHash(draft.txHash);
+          setHasPaid(true);
+          setVerificationStatus("Payment Restored! Click Create Group below to finalize group setup.");
+          onShowToast("Restored pending group fee payment from previous session.", "info");
+        }
+      } catch (e) {
+        console.error("Failed to parse group fee draft:", e);
+      }
+    }
+  }, [userId]);
+
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmail, setNewEmail] = useState("");
 
@@ -46,7 +75,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
 
     const alreadyAdded = members.some((m) => m.email === newEmail.trim());
     if (alreadyAdded) {
-      alert("This member has already been added.");
+      onShowToast("This member has already been added to the list.", "warning");
       return;
     }
 
@@ -106,13 +135,32 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
   };
 
   /**
-   * Handles real transaction creation for the 0.1 ADA group creation fee.
-   * Sends 0.1 ADA (100k Lovelaces) to the designated FAIRSHARE_ADDRESS.
-   * On success, sets hasPaid to true and stores the tx_hash.
+   * Handles real transaction creation for the 1.0 ADA group creation fee.
+   * Sends 1.0 ADA (1,000,000 Lovelaces) to the designated FAIRSHARE_ADDRESS.
+   * On success, sets hasPaid to true, stores the tx_hash, caches a local draft, and auto-submits creation.
    */
   const handlePayment = async () => {
     if (!connected || !wallet) {
-      alert("Wallet not connected. Please log in with a Cardano wallet first.");
+      onShowToast("Wallet not connected. Please log in with a Cardano wallet first.", "warning");
+      return;
+    }
+
+    const nameMissing = !groupName.trim();
+    const descriptionMissing = !groupDescription.trim();
+
+    if (nameMissing) {
+      setNameError(true);
+      if (nameErrorTimer.current) window.clearTimeout(nameErrorTimer.current);
+      nameErrorTimer.current = window.setTimeout(() => setNameError(false), 5000);
+    }
+    if (descriptionMissing) {
+      setDescriptionError(true);
+      if (descriptionErrorTimer.current) window.clearTimeout(descriptionErrorTimer.current);
+      descriptionErrorTimer.current = window.setTimeout(() => setDescriptionError(false), 5000);
+    }
+
+    if (nameMissing || descriptionMissing) {
+      onShowToast("Please enter a Group Name and Description before paying.", "warning");
       return;
     }
 
@@ -121,19 +169,18 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
     setPaymentError(false);
 
     try {
-      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
       const fairshareAddress = import.meta.env.VITE_FAIRSHARE_ADDRESS;
 
-      if (!blockfrostApiKey || !fairshareAddress) {
-        throw new Error("Configuration error: VITE_BLOCKFROST_API_KEY or VITE_FAIRSHARE_ADDRESS is missing in frontend env.");
+      if (!fairshareAddress) {
+        throw new Error("Configuration error: VITE_FAIRSHARE_ADDRESS is missing in frontend env.");
       }
 
       setVerificationStatus("Preparing 1.0 ADA fee transaction...");
-      const blockfrostProvider = new BlockfrostProvider(blockfrostApiKey);
+      const secureFetcher = new BackendProxyFetcher();
       const amountInLovelace = "1000000"; // 1.0 ADA = 1,000,000 Lovelaces
 
       const txBuilder = new MeshTxBuilder({
-        fetcher: blockfrostProvider,
+        fetcher: secureFetcher as any,
         verbose: true,
       });
 
@@ -141,9 +188,25 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
       const utxos = await wallet.getUtxosMesh();
       const changeAddress = await wallet.getChangeAddressBech32();
 
+      // Generate secure hashes to preserve privacy on the public blockchain
+      const senderHash = await sha256(userId);
+      const recipientHash = await sha256(fairshareAddress);
+      const groupHash = await sha256(groupName.trim());
+      const timestamp = new Date().toISOString();
+
       setVerificationStatus("Building payment transaction...");
       const unsignedTx = await txBuilder
         .txOut(fairshareAddress, [{ unit: "lovelace", quantity: amountInLovelace }])
+        .metadataValue(674, {
+          msg: ["FairShare: Group Creation Fee Paid"]
+        })
+        .metadataValue(1999, {
+          action: "Group Creation",
+          time: timestamp,
+          sender: senderHash,
+          recipient: recipientHash,
+          group: groupHash
+        })
         .changeAddress(changeAddress)
         .selectUtxosFrom(utxos)
         .complete();
@@ -156,14 +219,50 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
 
       setTxHash(submittedTxHash);
       setHasPaid(true);
-      setVerificationStatus("Payment successful! Click Create Group below to verify and start.");
-      alert(`Transaction successful!\n1.0 ADA sent to FairShare.\nHash: ${submittedTxHash}`);
+      setVerificationStatus("Payment successful! Finalizing group...");
+
+      // Save draft details to localStorage immediately upon payment submission
+      localStorage.setItem(`fairshare_pending_group_fee_${userId}`, JSON.stringify({
+        groupName: groupName.trim(),
+        groupDescription: groupDescription.trim(),
+        txHash: submittedTxHash,
+      }));
+
+      onShowToast("Transaction submitted successfully! Finalizing group...", "success");
+
+      // Auto-create group immediately in the background
+      try {
+        setVerificationStatus("Registering group in database...");
+        const res = await fetch("/api/groups/", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: groupName.trim(),
+            description: groupDescription.trim(),
+            image_url: "",
+            created_by: userId,
+            tx_hash: submittedTxHash,
+            status: "inactive",
+          }),
+        });
+
+        if (res.ok) {
+          localStorage.removeItem(`fairshare_pending_group_fee_${userId}`);
+          onShowToast("Group created successfully! Payment is being verified in the background.", "success");
+          onCreated();
+        } else {
+          setVerificationStatus("Payment successful! Click Create Group below to finish.");
+        }
+      } catch (postErr) {
+        console.error("Auto-group creation failed, user can retry manually:", postErr);
+        setVerificationStatus("Payment successful! Click Create Group below to finish.");
+      }
 
     } catch (error: any) {
       console.error("Payment transaction failed:", error);
       setPaymentError(true);
       setVerificationStatus("");
-      alert(error?.message || "Transaction failed. Make sure you have enough ADA (0.1 ADA + network fee) and try again.");
+      onShowToast(error?.message || "Transaction failed. Make sure you have enough ADA and try again.", "error");
     } finally {
       setIsPaying(false);
     }
@@ -192,26 +291,24 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
     }
 
     setLoading(true);
-    setVerificationStatus("Verifying 1.0 ADA payment on-chain via Blockfrost...");
+    setVerificationStatus("Submitting group creation to backend...");
 
     try {
-      const blockfrostApiKey = import.meta.env.VITE_BLOCKFROST_API_KEY;
-
       const res = await fetch("/api/groups/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: groupName.trim(),
-          description: groupDescription,
+          description: groupDescription.trim(),
           image_url: "",
           created_by: userId,
           tx_hash: txHash,
-          blockfrost_api_key: blockfrostApiKey,
+          status: "inactive",
         }),
       });
 
       if (!res.ok) {
-        let errorMsg = "Failed to verify transaction. The transaction might still be propagating on-chain. Please wait a few seconds and try again.";
+        let errorMsg = "Failed to create group. Please try again.";
         try {
           const errorData = await res.json();
           if (errorData?.detail) errorMsg = errorData.detail;
@@ -219,15 +316,14 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
         throw new Error(errorMsg);
       }
       
-      const groupResult = await res.json();
-      console.log("Verification Success! Backend response:", groupResult);
-      alert(`On-Chain Payment Verified Successfully!\nConsole confirmation logged in the server.\n\nBackend Msg: ${groupResult.message || "Bypassed DB writes"}`);
-
-      // We still run the closing callback to dismiss the modal, but 
-      // no groups will have been stored in the DB as requested!
+      await res.json();
+      onShowToast("Group created successfully! Payment is being verified in the background.", "success");
+      
+      // Clear draft details from localStorage upon successful group creation
+      localStorage.removeItem(`fairshare_pending_group_fee_${userId}`);
       onCreated();
     } catch (err: any) {
-      alert(err?.message || "Something went wrong. Please try again.");
+      onShowToast(err?.message || "Something went wrong. Please try again.", "error");
     } finally {
       setLoading(false);
       setVerificationStatus("");
@@ -251,6 +347,30 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId })
           </div>
 
           <div className="modal-body cg-modal-body">
+            {/* Payment Restored Banner */}
+            {hasPaid && localStorage.getItem(`fairshare_pending_group_fee_${userId}`) && (
+              <div className="cg-restored-banner" style={{
+                background: "rgba(245, 158, 11, 0.1)",
+                border: "1px solid rgba(245, 158, 11, 0.4)",
+                borderRadius: 12,
+                padding: "16px 20px",
+                marginBottom: 20,
+                color: "#d97706",
+                fontSize: 14,
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                backdropFilter: "blur(8px)",
+                boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.04)"
+              }}>
+                <span className="material-symbols-outlined" style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}>paid</span>
+                <div>
+                  <strong style={{ fontWeight: 600, display: "block", marginBottom: 2 }}>Payment Restored</strong>
+                  <span>We found a paid 1.0 ADA group creation fee (tx: {txHash.slice(0, 16)}...). You can complete your group now without paying again!</span>
+                </div>
+              </div>
+            )}
+
             <div className="cg-modal-grid">
               <div className="card cg-card">
                 <div className="cg-identity">

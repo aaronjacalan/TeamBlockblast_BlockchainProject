@@ -7,7 +7,7 @@ interface LandingProps {
 
 const Landing: React.FC<LandingProps> = ({ onGetStarted }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [scrollY, setScrollY] = useState(0);
+  const [, setScrollY] = useState(0);
   const [activeFeature, setActiveFeature] = useState(0);
 
   /* ── scroll listener for sticky nav blur ── */
