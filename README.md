@@ -26,6 +26,23 @@ A premium, interactive, and fully decentralized group expense splitting applicat
 
 ---
 
+## ⬡ Cardano & Blockfrost Integration
+
+Blockfrost acts as our secure, high-performance gateway to the Cardano Blockchain, allowing FairShare to verify transactions, monitor live balances, and build smart-contract settlements without running a heavy full node.
+
+### 1. Group Creation Fee Verification
+When a user submits a group creation transaction, the FastAPI backend queries Blockfrost to verify the transaction in a dual-stage check:
+- **UTXO Output Scanning**: It fetches the transaction outputs from `/api/v0/txs/{tx_hash}/utxos` and scans the output addresses. It verifies that at least `1.0 ADA` (in Lovelaces, matching `1,000,000 Lovelaces`) was successfully transferred to FairShare's secure fee collection wallet.
+- **Cardano Mempool Fallback**: If the transaction is too fresh to be included in a block, the backend queries the Cardano mempool via `/api/v0/mempool/{tx_hash}`. If the transaction exists in the mempool, it accepts it immediately, ensuring a lightning-fast, zero-delay user experience.
+
+### 2. Clientside Transaction Building (Protocol Parameters)
+To assemble, balance, and sign ADA payments inside the browser securely:
+- The frontend must retrieve the latest **Epoch Protocol Parameters** from the blockchain.
+- The FastAPI backend provides a wrapper endpoint `/api/blockchain/protocol-parameters` which calls Blockfrost's `/api/v0/epochs/latest/parameters`.
+- These parameters (slot lengths, script fees, memory unit costs) are consumed by the clientside `@meshsdk` library, allowing users to sign transactions directly inside their local Cardano browser extension (e.g., Lace, Nami, Eternl) without exposing private keys.
+
+---
+
 ## 📁 Project Structure
 
 ```text
