@@ -1,160 +1,123 @@
-# FairShare 💜
+# FairShare ⬡ 
 
-A minimalist expense splitting app built on the **Cardano blockchain**.  
-
-The app allows users to:
-- Create groups
-- Track shared expenses
-- Automatically split costs among members
-- Settle balances using Cardano wallet transactions
-
-FairShare uses Cardano wallets for authentication and blockchain-based payments, making expense sharing transparent and decentralized.
+A premium, interactive, and fully decentralized group expense splitting application built on the **Cardano Blockchain** with robust Web3 security, on-chain metadata protection, and stunning modern aesthetics.
 
 ---
 
-## Tech Stack
+## ⚡ Core Features
 
-| Layer      | Technology                        |
-|------------|-----------------------------------|
-| Frontend   | React + TypeScript + Vite         |
-| Backend    | Python + FastAPI                  |
-| Blockchain | Cardano                           |
-| API        | Blockfrost                        |
-| Wallet     | Lace Wallet Extension             |
-
----
-
-## Team
-
-| Name       | Role                              |
-|------------|-----------------------------------|
-| Aaron      | Frontend – UI/UX                  |
-| Lovely     | Frontend – UI/UX                  |
-| Christian  | Backend – Wallet Connection       |
-| Zendy      | Backend – Wallet Transactions     |
-| Jairus     | Technical Support & Integration   |
+- **Modern Glassmorphic UI**: Elegant, highly polished visual elements using curated HSL color palettes, fluid layout transitions, responsive cards, and a custom interactive glassmorphic toast notification system.
+- **Cardano Web3 Authentication**: Ultra-secure, nonce-based signature workflow leveraging standard Cardano browser wallets (e.g. Lace, Eternl, Nami, Vespr) and cryptographically verifying ownership backend.
+- **On-Chain Settlement**: Real-time balance calculations, automated multi-party cost splits, and transparent settling of debts directly via Cardano transactions.
+- **Group Creation Fee Protection**: Zero-loss transaction verification. If a user pays the group fee and unmounts, FastAPI background workers proactively retry confirmation in the background, allowing the user to resume their group creation via sync/async API endpoints.
+- **On-Chain Privacy (SHA-256 Metadata)**: Clientside hashing of transactional details (who, to whom, action, timestamp, group) using standard cryptographic hashes prior to committing them on-chain under CIP-20 standards (label `1999`).
+- **Interactive Web3 Analytics Panel**: Live dashboard showing spent statistics, a beautiful SVG fairness ring gauge, and real-time Cardano transaction statistics.
 
 ---
 
-## Features
+## 🛠️ Technology Stack
 
-- Connect Cardano wallet to identify users
-- Create groups and invite members
-- Add, edit, or remove shared expenses
-- Automatically calculates total and splits cost among members
-- Settle payments via Cardano blockchain transactions
-- FastAPI backend integration with Blockfrost API
+| Layer | Technologies | Description |
+|---|---|---|
+| **Frontend** | React 19 + Vite 8 + TypeScript 6 | Highly modular, clean architecture with strict typing. |
+| **Styling** | Vanilla CSS + HSL Palettes | Fluid animations, glassmorphic blur backdrops, responsive flexboxes. |
+| **Backend** | Python 3.11 + FastAPI + Supabase | Scalable API backend, background tasks, database ledger. |
+| **Blockchain** | Cardano + `@meshsdk` (Core, React, Wallet) | Trustless operations, CIP-20 CIP-30 protocols. |
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
-```
+```text
 TeamBlockblast_BlockchainProject/
-├── frontend/         # React + Vite app
-├── backend/          # Python API server
-└── README.md
+├── frontend/           # Vite React Web3 application
+│   ├── src/
+│   │   ├── components/ # Reusable UI components (Header, Footer, Chat items)
+│   │   ├── pages/      # Views (Landing, Login, Dashboard, GroupDetails)
+│   │   ├── utils/      # Blockchain providers & helper tools
+│   │   └── main.tsx    # Application entry wrapping MeshProvider
+└── backend/            # FastAPI REST & background processing server
+    ├── routers/        # Endpoint routers (auth, groups, expenses)
+    ├── database.py     # Supabase client instantiation
+    └── main.py         # App entry and CORS middlewares
 ```
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
-### Prerequisites
+### 📋 Prerequisites
 
-Make sure you have the following installed:
-
-- [Node.js](https://nodejs.org/) v18 or later
-- [Python](https://www.python.org/) v3.10 or later
-- [pip](https://pip.pypa.io/en/stable/)
-- A Blockfrost API key → [blockfrost.io](https://blockfrost.io)
-
----
-
-### Running the Frontend
-
-```bash
-# 1. Go to the frontend folder
-cd frontend
-
-# 2. Install dependencies
-npm install
-
-# 3. Start the dev server
-npm run dev
-```
-
-The app will be available at: `http://localhost:5173`
+Ensure you have the following installed on your machine:
+- **Node.js** (v18.0 or later)
+- **Python** (v3.10 or later)
+- **Supabase Account** (for SQL backend ledger)
+- **Cardano Wallet Extension** (e.g., Lace, Nami, Eternl in preprod testnet mode)
 
 ---
 
-### Running the Backend
+### 💻 1. Setting Up the Backend
 
 ```bash
-# 1. Go to the backend folder
+# Move to backend directory
 cd backend
- 
-# 2. (Optional but recommended) Create a virtual environment
+
+# Create and activate Python virtual environment
 python -m venv venv
- 
-# Activate it:
-# On Windows:
-venv\Scripts\activate
-# On Mac/Linux:
-source venv/bin/activate
- 
-# 3. Install dependencies
+source venv/bin/activate # For Windows use: venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
- 
-# 4. Set up your environment variables
-# Create a .env file in the backend folder:
+
+# Create your environmental configuration
+# Set your SUPABASE_URL, SUPABASE_KEY, etc. in .env
 cp .env.example .env
-# Then open .env and add your Blockfrost API key
- 
-# 5. Run the backend server
+
+# Start the development server
 uvicorn main:app --reload
 ```
-
-The backend will be available at: `http://localhost:8000` 
-
-API docs (auto-generated by FastAPI) at: `http://localhost:8000/docs`
+The FastAPI documentation will be interactively available at: **`http://localhost:8000/docs`**
 
 ---
 
-### Environment Variables
+### 🎨 2. Setting Up the Frontend
 
-Create a `.env` file inside the `backend/` folder:
-
-```env
-BLOCKFROST_API_KEY=your_blockfrost_api_key_here
-NETWORK=testnet
-```
-
-> ⚠️ Never commit your `.env` file to GitHub. It's already in `.gitignore`.
-
----
-
-## Running Both Together
-
-Open **two terminals** side by side:
-
-**Terminal 1 – Frontend:**
 ```bash
-cd frontend
+# Move to frontend directory
+cd ../frontend
+
+# Install dependencies
 npm install
+
+# Start the Vite local server
 npm run dev
 ```
+The web client will be active at: **`http://localhost:5173`**
 
-**Terminal 2 – Backend:**
+---
+
+## 🧪 Build and Verification
+
+Ensure code quality, zero unused imports, and strict TypeScript compliance before committing:
+
 ```bash
-cd backend
-source venv/bin/activate   # or venv\Scripts\activate on Windows
-pip install -r requirements.txt
-python main.py
+# Run flat ESLint check
+npm run lint
+
+# Compile and package for production
+npm run build
 ```
 
 ---
-## License
 
-This project is for academic purposes only.
+## 🔒 Security & Privacy Commitments
 
+1. **Non-Custodial Design**: FairShare never holds your funds. All payments flow peer-to-peer on Cardano.
+2. **Zero Exposed Secrets**: No API keys, database credentials, or wallet seed phrases are ever hardcoded in the codebase. All keys are securely managed via backend `.env` variables.
+3. **Clientside Privacy-First Hashing**: Private transaction context (such as exact split ratios and specific member names) is fully obscured from public block explorers using clientside cryptographic hashes.
+
+---
+
+## 📄 License
+
+This project is prepared and distributed for academic/auditing purposes only. All rights reserved.
