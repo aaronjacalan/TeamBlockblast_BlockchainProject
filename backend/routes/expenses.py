@@ -111,7 +111,7 @@ def audit_settlement_background(
     expected_amount: float,
     recipient_address: str,
     settlement_id: str,
-    optimistic_expense_ids: list
+    optimistic_splits: list
 ):
     print(f"\n[BACKGROUND AUDIT START] Settlement ID: {settlement_id} (tx: {tx_hash})")
     print(f"  Expecting {expected_amount} ADA to be sent to {recipient_address}")
@@ -138,20 +138,13 @@ def audit_settlement_background(
         print(f"  [BACKGROUND AUDIT FAILED] Settlement {settlement_id} FAILED verification after 3 attempts. ROLLING BACK...")
         try:
             # 1. ROLLBACK expense_splits back to unsettled (is_settled: False)
-            for exp_id in optimistic_expense_ids:
-                supabase.table("expense_splits").update({"is_settled": False}).eq("expense_id", exp_id).eq("user_id", from_user_id).execute()
+            for split in optimistic_splits:
+                supabase.table("expense_splits").update({"is_settled": False}).eq("expense_id", split["expense_id"]).eq("user_id", split["user_id"]).execute()
 
             # 2. Reset associated expenses tx_status back to pending
-            expenses_result = (
-                supabase.table("expenses")
-                .select("id")
-                .eq("group_id", group_id)
-                .eq("paid_by", to_user_id)
-                .execute()
-            )
-            if expenses_result.data:
-                for exp in expenses_result.data:
-                    supabase.table("expenses").update({"tx_status": "pending"}).eq("id", exp["id"]).execute()
+            distinct_expense_ids = list(set([split["expense_id"] for split in optimistic_splits]))
+            for exp_id in distinct_expense_ids:
+                supabase.table("expenses").update({"tx_status": "pending"}).eq("id", exp_id).execute()
 
             # 3. Mark the settlement record as failed in Supabase
             supabase.table("settlements").update({"tx_status": "failed"}).eq("id", settlement_id).execute()
@@ -192,24 +185,34 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
         )
     recipient_address = recipient.data[0]["payment_address"].strip()
 
-    expenses_result = (
+    # Query 1: Expenses paid by data.to_user_id (User A) — where User B (data.from_user_id) owes A money
+    expenses_to_user = (
         supabase.table("expenses")
         .select("id, amount")
         .eq("group_id", data.group_id)
         .eq("paid_by", data.to_user_id)
         .execute()
     )
+    expense_ids_to_user = [e["id"] for e in expenses_to_user.data] if expenses_to_user.data else []
 
-    if not expenses_result.data:
-        print("NO EXPENSES FOUND - returning early")
-        return {"message": "No expenses to settle", "settled": 0}
+    # Query 2: Expenses paid by data.from_user_id (User B) — where User A (data.to_user_id) owes B money
+    expenses_from_user = (
+        supabase.table("expenses")
+        .select("id, amount")
+        .eq("group_id", data.group_id)
+        .eq("paid_by", data.from_user_id)
+        .execute()
+    )
+    expense_ids_from_user = [e["id"] for e in expenses_from_user.data] if expenses_from_user.data else []
 
-    expense_ids = [e["id"] for e in expenses_result.data]
     settled_count = 0
-    total_amount = 0.0
-    optimistic_expense_ids = []
+    sum_B_owes_A = 0.0
+    sum_A_owes_B = 0.0
+    optimistic_splits = []
+    involved_expense_ids = []
 
-    for expense_id in expense_ids:
+    # A. Calculate how much B (from_user_id) owes A (to_user_id) on A's expenses
+    for expense_id in expense_ids_to_user:
         split_check = (
             supabase.table("expense_splits")
             .select("amount_owed")
@@ -220,15 +223,47 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
         )
 
         if split_check.data:
-            total_amount += split_check.data[0]["amount_owed"]
+            amount = split_check.data[0]["amount_owed"]
+            sum_B_owes_A += amount
             settled_count += 1
-            optimistic_expense_ids.append(expense_id)
+            optimistic_splits.append({"expense_id": expense_id, "user_id": data.from_user_id})
+            involved_expense_ids.append(expense_id)
             
             # Optimistically mark split as settled
             supabase.table("expense_splits").update({"is_settled": True}).eq("expense_id", expense_id).eq("user_id", data.from_user_id).execute()
-        else:
-            print(f"no unsettled split found for expense {expense_id}")
 
+    # B. Calculate how much A (to_user_id) owes B (from_user_id) on B's expenses
+    for expense_id in expense_ids_from_user:
+        split_check = (
+            supabase.table("expense_splits")
+            .select("amount_owed")
+            .eq("expense_id", expense_id)
+            .eq("user_id", data.to_user_id)
+            .eq("is_settled", False)
+            .execute()
+        )
+
+        if split_check.data:
+            amount = split_check.data[0]["amount_owed"]
+            sum_A_owes_B += amount
+            settled_count += 1
+            optimistic_splits.append({"expense_id": expense_id, "user_id": data.to_user_id})
+            involved_expense_ids.append(expense_id)
+            
+            # Optimistically mark split as settled
+            supabase.table("expense_splits").update({"is_settled": True}).eq("expense_id", expense_id).eq("user_id", data.to_user_id).execute()
+
+    # Calculate net balance B owes A
+    total_net_amount = round(sum_B_owes_A - sum_A_owes_B, 6)
+    print(f"B bilateral netting details: B owes A {sum_B_owes_A}, A owes B {sum_A_owes_B}, net_amount: {total_net_amount}")
+
+    # Fallback to sum_B_owes_A if net amount is negative or zero (e.g. wrong settling direction, but we settle positive B owes A splits)
+    if total_net_amount <= 0:
+        total_net_amount = round(sum_B_owes_A, 6)
+
+    # C. Update expense tx_status if all splits are now settled
+    distinct_expense_ids = list(set(involved_expense_ids))
+    for expense_id in distinct_expense_ids:
         splits = (
             supabase.table("expense_splits")
             .select("is_settled")
@@ -244,7 +279,7 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
             }).eq("id", expense_id).execute()
             print(f"expense {expense_id} marked as settled")
 
-    print(f"total_amount: {total_amount}")
+    print(f"total_amount: {total_net_amount}")
     print(f"settled_count: {settled_count}")
 
     if settled_count > 0:
@@ -254,7 +289,7 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
                 "group_id": data.group_id,
                 "from_user": data.from_user_id,
                 "to_user": data.to_user_id,
-                "amount": round(total_amount, 6),
+                "amount": total_net_amount,
                 "tx_hash": data.tx_hash,
                 "tx_status": "pending",
             }).execute()
@@ -266,12 +301,12 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
                 "user_id": data.to_user_id,
                 "type": "payment_settled",
                 "title": "Payment Pending Verification",
-                "message": f"You received ADA {round(total_amount, 6)} — pending verification (tx: {data.tx_hash[:12]}...)",
+                "message": f"You received ADA {total_net_amount} — pending verification (tx: {data.tx_hash[:12]}...)",
                 "metadata": {
                     "group_id": data.group_id,
                     "from_user_id": data.from_user_id,
                     "tx_hash": data.tx_hash,
-                    "amount": round(total_amount, 6),
+                    "amount": total_net_amount,
                 }
             }).execute()
 
@@ -282,10 +317,10 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
                 data.from_user_id,
                 data.to_user_id,
                 data.tx_hash,
-                total_amount,
+                total_net_amount,
                 recipient_address,
                 settlement_id,
-                optimistic_expense_ids
+                optimistic_splits
             )
             
             print(f"settlement insert result: {insert_result.data}")
@@ -296,7 +331,7 @@ def settle_splits(data: SettleRequest, background_tasks: BackgroundTasks):
             data.from_user_id,
             data.group_id,
             "payment_settled",
-            f"Settled ADA {round(total_amount, 6)} — pending verification (tx: {data.tx_hash[:12]}...)"
+            f"Settled ADA {total_net_amount} — pending verification (tx: {data.tx_hash[:12]}...)"
         )
 
     return {"message": "Splits settled, auditing in background.", "settled": settled_count}

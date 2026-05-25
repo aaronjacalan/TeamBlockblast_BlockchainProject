@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from database import supabase
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -19,6 +19,7 @@ class GroupCreate(BaseModel):
     created_by: str  # user uuid
     tx_hash: str     # transaction hash of the 1.0 ADA creation fee
     status: Optional[str] = "inactive"
+    initial_members: Optional[List[str]] = []
 
 
 
@@ -136,7 +137,56 @@ def update_group(group_id: str, data: GroupUpdate):
     return get_group(group_id)
 
 
-def background_verify_group_payment(group_id: str, tx_hash: str, created_by: str, name: str):
+def send_group_invite_by_email(group_id: str, email: str, invited_by: str, group_name: str):
+    try:
+        # find user by email
+        user_result = supabase.table("users").select("id").eq("email", email.strip()).execute()
+        if not user_result.data:
+            print(f"[INVITE WARNING] User with email {email} not found. Invite skipped.")
+            return
+
+        invited_user_id = user_result.data[0]["id"]
+
+        # check if already a member
+        existing = (
+            supabase.table("group_members")
+            .select("id")
+            .eq("group_id", group_id)
+            .eq("user_id", invited_user_id)
+            .execute()
+        )
+        if existing.data:
+            return
+
+        # check if already invited
+        existing_notif = (
+            supabase.table("notifications")
+            .select("id")
+            .eq("user_id", invited_user_id)
+            .eq("type", "group_invite")
+            .eq("metadata->>group_id", group_id)
+            .execute()
+        )
+        if existing_notif.data:
+            return
+
+        # create notification for the invited user
+        supabase.table("notifications").insert({
+            "user_id": invited_user_id,
+            "type": "group_invite",
+            "title": "Group Invite",
+            "message": f"You've been invited to join \"{group_name}\"",
+            "metadata": {
+                "group_id": group_id,
+                "invited_by": invited_by,
+            }
+        }).execute()
+        print(f"[INVITE SUCCESS] Sent group invite to {email}")
+    except Exception as err:
+        print(f"[INVITE ERROR] Failed to invite {email}: {err}")
+
+
+def background_verify_group_payment(group_id: str, tx_hash: str, created_by: str, name: str, initial_members: list = None):
     print(f"\n=== BACKGROUND GROUP VERIFICATION START: group={group_id}, tx={tx_hash} ===")
     verified = False
     for attempt in range(1, 6):
@@ -194,6 +244,11 @@ def background_verify_group_payment(group_id: str, tx_hash: str, created_by: str
                     "tx_hash": tx_hash,
                 }
             }).execute()
+
+            # 5. Send invites to initial members if any
+            if initial_members:
+                for email in initial_members:
+                    send_group_invite_by_email(group_id, email, created_by, name)
         except Exception as err:
             print(f"  [BACKGROUND ERROR] Failed to complete activation database writes: {err}")
     else:
@@ -294,6 +349,11 @@ def create_group(data: GroupCreate, background_tasks: BackgroundTasks):
         # Log the activity
         log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
 
+        # Send invites to initial members if any
+        if data.initial_members:
+            for email in data.initial_members:
+                send_group_invite_by_email(group_id, email, data.created_by, data.name.strip())
+
         return group
     else:
         # Asynchronous/Fast verification flow (status="inactive")
@@ -319,7 +379,8 @@ def create_group(data: GroupCreate, background_tasks: BackgroundTasks):
             group_id,
             data.tx_hash.strip(),
             data.created_by,
-            data.name.strip()
+            data.name.strip(),
+            data.initial_members
         )
 
         return group

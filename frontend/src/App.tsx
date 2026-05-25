@@ -256,10 +256,14 @@ const App: React.FC = () => {
           userId={userId}
           onShowToast={showToast}
           onClose={() => setCreateGroupOpen(false)}
-          onCreated={async () => {
+          onCreated={async (groupId?: string) => {
             await fetchGroups();
             setCreateGroupOpen(false);
-            navigate("groups");
+            if (groupId) {
+              navigateToGroup(groupId);
+            } else {
+              navigate("groups");
+            }
           }}
         />
       )}

@@ -6,7 +6,7 @@ import { BackendProxyFetcher } from "../utils/customFetcher";
 
 interface CreateGroupProps {
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (groupId?: string) => void;
   userId: string;
   onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
@@ -44,6 +44,20 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
   const descriptionErrorTimer = useRef<number | null>(null);
   const paymentErrorTimer = useRef<number | null>(null);
 
+  const [verificationPhase, setVerificationPhase] = useState<"idle" | "paying" | "verifying" | "success" | "failed">("idle");
+  const [createdGroupId, setCreatedGroupId] = useState<string | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const pollingIntervalRef = useRef<number | null>(null);
+
+  // Clean up polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        window.clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
   // Load draft on mount
   useEffect(() => {
     const draftStr = localStorage.getItem(`fairshare_pending_group_fee_${userId}`);
@@ -63,6 +77,44 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
       }
     }
   }, [userId]);
+
+  const startPolling = (groupId: string) => {
+    if (pollingIntervalRef.current) {
+      window.clearInterval(pollingIntervalRef.current);
+    }
+    setVerificationPhase("verifying");
+    setElapsedSeconds(0);
+    
+    let elapsed = 0;
+    pollingIntervalRef.current = window.setInterval(async () => {
+      elapsed += 5;
+      setElapsedSeconds(elapsed);
+      
+      try {
+        const res = await fetch(`/api/groups/${groupId}`);
+        if (res.ok) {
+          const groupData = await res.json();
+          if (groupData.status === "active") {
+            if (pollingIntervalRef.current) {
+              window.clearInterval(pollingIntervalRef.current);
+            }
+            setVerificationPhase("success");
+            onShowToast("Cardano payment verified successfully!", "success");
+          }
+        }
+      } catch (err) {
+        console.error("Error polling group status:", err);
+      }
+      
+      if (elapsed >= 180) { // 3 minutes timeout
+        if (pollingIntervalRef.current) {
+          window.clearInterval(pollingIntervalRef.current);
+        }
+        setVerificationPhase("failed");
+        onShowToast("Verification timed out. It might take longer on the network.", "warning");
+      }
+    }, 5000);
+  };
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEmail, setNewEmail] = useState("");
@@ -243,13 +295,21 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
             created_by: userId,
             tx_hash: submittedTxHash,
             status: "inactive",
+            initial_members: members.filter((m) => !m.isOwner && m.email).map((m) => m.email),
           }),
         });
 
         if (res.ok) {
+          const groupData = await res.json();
+          const groupId = groupData?.id;
+          setCreatedGroupId(groupId);
           localStorage.removeItem(`fairshare_pending_group_fee_${userId}`);
-          onShowToast("Group created successfully! Payment is being verified in the background.", "success");
-          onCreated();
+          onShowToast("Group registered! Now starting payment verification...", "success");
+          if (groupId) {
+            startPolling(groupId);
+          } else {
+            onCreated();
+          }
         } else {
           setVerificationStatus("Payment successful! Click Create Group below to finish.");
         }
@@ -304,6 +364,7 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
           created_by: userId,
           tx_hash: txHash,
           status: "inactive",
+          initial_members: members.filter((m) => !m.isOwner && m.email).map((m) => m.email),
         }),
       });
 
@@ -316,12 +377,18 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
         throw new Error(errorMsg);
       }
       
-      await res.json();
-      onShowToast("Group created successfully! Payment is being verified in the background.", "success");
+      const groupData = await res.json();
+      const groupId = groupData?.id;
+      setCreatedGroupId(groupId);
+      onShowToast("Group created successfully! Starting payment verification...", "success");
       
       // Clear draft details from localStorage upon successful group creation
       localStorage.removeItem(`fairshare_pending_group_fee_${userId}`);
-      onCreated();
+      if (groupId) {
+        startPolling(groupId);
+      } else {
+        onCreated();
+      }
     } catch (err: any) {
       onShowToast(err?.message || "Something went wrong. Please try again.", "error");
     } finally {
@@ -332,184 +399,371 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
 
   return (
     <>
-      <div className="modal-backdrop" onClick={onClose}>
+      <div 
+        className="modal-backdrop" 
+        onClick={() => {
+          if (verificationPhase !== "idle" && verificationPhase !== "paying") {
+            onCreated();
+          } else {
+            onClose();
+          }
+        }}
+      >
         <div className="modal-box cg-modal-box" onClick={(e) => e.stopPropagation()}>
           <div className="modal-header">
             <div>
-              <h2 className="text-headline-sm">Start a new group</h2>
+              <h2 className="text-headline-sm">
+                {verificationPhase === "verifying" && "Verifying Fee Payment"}
+                {verificationPhase === "success" && "Verification Success!"}
+                {verificationPhase === "failed" && "Verification Delayed"}
+                {(verificationPhase === "idle" || verificationPhase === "paying") && "Start a new group"}
+              </h2>
               <p className="text-body-md" style={{ color: "var(--color-secondary)", marginTop: 4 }}>
-                Organize shared expenses with friends and settle balances easily.
+                {verificationPhase === "verifying" && "Confirming group registration fee on-chain..."}
+                {verificationPhase === "success" && "Your group has been successfully activated!"}
+                {verificationPhase === "failed" && "The transaction is still processing on Cardano."}
+                {(verificationPhase === "idle" || verificationPhase === "paying") && "Organize shared expenses with friends and settle balances easily."}
               </p>
             </div>
-            <button className="modal-close-btn" onClick={onClose}>
+            <button 
+              className="modal-close-btn" 
+              onClick={() => {
+                if (verificationPhase !== "idle" && verificationPhase !== "paying") {
+                  onCreated();
+                } else {
+                  onClose();
+                }
+              }}
+            >
               <span className="material-symbols-outlined">close</span>
             </button>
           </div>
 
           <div className="modal-body cg-modal-body">
-            {/* Payment Restored Banner */}
-            {hasPaid && localStorage.getItem(`fairshare_pending_group_fee_${userId}`) && (
-              <div className="cg-restored-banner" style={{
-                background: "rgba(245, 158, 11, 0.1)",
-                border: "1px solid rgba(245, 158, 11, 0.4)",
-                borderRadius: 12,
-                padding: "16px 20px",
-                marginBottom: 20,
-                color: "#d97706",
-                fontSize: 14,
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                backdropFilter: "blur(8px)",
-                boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.04)"
-              }}>
-                <span className="material-symbols-outlined" style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}>paid</span>
-                <div>
-                  <strong style={{ fontWeight: 600, display: "block", marginBottom: 2 }}>Payment Restored</strong>
-                  <span>We found a paid 1.0 ADA group creation fee (tx: {txHash.slice(0, 16)}...). You can complete your group now without paying again!</span>
-                </div>
-              </div>
-            )}
+            {verificationPhase !== "idle" && verificationPhase !== "paying" ? (
+              <div className="cg-verification-container">
+                {verificationPhase === "verifying" && (
+                  <div className="cg-verification-state verifying">
+                    <div className="cg-pulse-loader">
+                      <div className="cg-pulse-ring"></div>
+                      <div className="cg-pulse-ring-outer"></div>
+                      <span className="material-symbols-outlined cg-pulse-icon">hourglass_empty</span>
+                    </div>
+                    <h3 className="text-headline-sm" style={{ marginTop: 24, textAlign: 'center' }}>Verifying Cardano Payment</h3>
+                    <p className="text-body-md cg-verification-subtitle" style={{ textAlign: 'center', maxWidth: 440, margin: '8px auto 24px auto', color: 'var(--color-zinc-400)' }}>
+                      Waiting for on-chain block confirmation... This usually takes 20-40 seconds.
+                    </p>
+                    
+                    <div className="cg-verification-details">
+                      <div className="cg-detail-row">
+                        <span>Transaction Hash</span>
+                        <a 
+                          href={`https://preview.cardanoscan.io/transaction/${txHash}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="cg-tx-link"
+                        >
+                          {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                        </a>
+                      </div>
+                      <div className="cg-detail-row">
+                        <span>Time Elapsed</span>
+                        <span className="cg-timer-val">{elapsedSeconds}s</span>
+                      </div>
+                      <div className="cg-detail-row">
+                        <span>Status</span>
+                        <span className="cg-status-badge pending">
+                          <span className="material-symbols-outlined spinner-icon" style={{ fontSize: 14, animation: "spin 1.5s linear infinite" }}>sync</span>
+                          Polling Status
+                        </span>
+                      </div>
+                    </div>
 
-            <div className="cg-modal-grid">
-              <div className="card cg-card">
-                <div className="cg-identity">
-                  <div className="cg-name-field">
-                    <label className="cg-label">GROUP NAME</label>
-                    <input
-                      className={`cg-name-input${nameError ? " cg-error" : ""}`}
-                      type="text"
-                      placeholder="e.g. Summer Trip 2024"
-                      value={groupName}
-                      onChange={(e) => setGroupName(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="cg-desc-block">
-                  <div className="cg-desc-header">
-                    <label className="cg-label">SHORT DESCRIPTION</label>
-                    <span className="cg-desc-count">
-                      {Math.max(0, 100 - groupDescription.length)} characters left
-                    </span>
-                  </div>
-                  <textarea
-                    className={`cg-desc-input${descriptionError ? " cg-error" : ""}`}
-                    placeholder="Add a quick note for your group..."
-                    value={groupDescription}
-                    onChange={(e) => handleDescriptionChange(e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="cg-cta">
-                  <button
-                    className={`cg-pay-btn${hasPaid ? " paid" : ""}${paymentError ? " cg-error" : ""}`}
-                    onClick={handlePayment}
-                    disabled={hasPaid || isPaying || loading}
-                  >
-                    {isPaying ? "Paying..." : hasPaid ? "Paid 1.0 ADA" : "Pay 1.0 ADA"}
-                  </button>
-                  <button className="cg-create-btn" onClick={handleCreate} disabled={loading || isPaying || !hasPaid}>
-                    {loading ? "Verifying..." : "Create Group"}
-                  </button>
-                </div>
-
-
-                {/* Cardano Transaction & Verification Status Indicator */}
-                {verificationStatus && (
-                  <div className="cg-status-message" style={{
-                    marginTop: 12,
-                    padding: "10px 14px",
-                    borderRadius: 8,
-                    background: "var(--color-zinc-100, #f4f4f5)",
-                    border: "1px solid var(--color-zinc-200, #e4e4e7)",
-                    color: "var(--color-zinc-700, #3f3f46)",
-                    fontSize: 13,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 10,
-                  }}>
-                    <span className="material-symbols-outlined spinner-icon" style={{
-                      fontSize: 16,
-                      color: "var(--color-primary)",
-                      animation: "spin 1.5s linear infinite",
-                      display: "inline-block"
-                    }}>sync</span>
-                    <span>{verificationStatus}</span>
+                    <div className="cg-verification-actions">
+                      <button 
+                        className="btn btn-secondary cg-minimize-btn"
+                        onClick={() => onCreated()}
+                      >
+                        Minimize & Finish in Background
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                <div className="cg-info-alert">
-                  <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)", marginTop: 2, flexShrink: 0 }}>
-                    info
-                  </span>
-                  <div>
-                    <p className="text-label-md">Split smarter with FairShare</p>
-                    <p className="text-body-md" style={{ color: "var(--color-on-surface-variant)", marginTop: 4 }}>
-                      All group expenses are tracked locally. Invite members by name and email to keep everyone in sync.
+                {verificationPhase === "success" && (
+                  <div className="cg-verification-state success">
+                    <div className="cg-success-checkmark">
+                      <span className="material-symbols-outlined cg-success-icon" style={{ fontSize: 64, color: "var(--color-success)" }}>check_circle</span>
+                    </div>
+                    <h3 className="text-headline-sm" style={{ marginTop: 24, textAlign: 'center', color: "var(--color-success)" }}>Group Verified!</h3>
+                    <p className="text-body-md cg-verification-subtitle" style={{ textAlign: 'center', maxWidth: 440, margin: '8px auto 24px auto', color: 'var(--color-zinc-400)' }}>
+                      Your payment of 1.0 ADA has been confirmed on the Cardano blockchain.
                     </p>
-                  </div>
-                </div>
-              </div>
 
-              <div className="cg-side">
-                <div className="cg-side-card">
-                  <div className="cg-side-header">
-                    <label className="cg-label" style={{ marginBottom: 0 }}>MEMBERS</label>
-                    <button
-                      className="btn btn-secondary"
-                      style={{ fontSize: 13, padding: "6px 12px" }}
-                      onClick={() => setShowAddModal(true)}
-                    >
-                      <span className="material-symbols-outlined" style={{ fontSize: 15 }}>person_add</span>
-                      Add Member
-                    </button>
-                  </div>
-
-                  <div className="cg-member-list">
-                    {members.map((m) => (
-                      <div
-                        key={m.id}
-                        className="cg-member-row card"
-                        onMouseEnter={() => setHoveredMember(m.id)}
-                        onMouseLeave={() => setHoveredMember(null)}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                          {m.avatar ? (
-                            <img src={m.avatar} alt={m.name} className="cg-member-avatar" />
-                          ) : (
-                            <div className="cg-member-avatar-placeholder">
-                              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
-                                {m.isOwner ? "person" : "person_add"}
-                              </span>
-                            </div>
-                          )}
-                          <div>
-                            <p className="text-label-md">{m.name}</p>
-                            <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
-                              {m.email}
-                            </p>
-                          </div>
-                        </div>
-
-                        {m.isOwner ? (
-                          <span className="cg-creator-badge">Creator</span>
-                        ) : (
-                          <button
-                            className="cg-delete-btn"
-                            style={{ opacity: hoveredMember === m.id ? 1 : 0 }}
-                            onClick={() => confirmDelete(m.id)}
-                          >
-                            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
-                          </button>
-                        )}
+                    <div className="cg-verification-details">
+                      <div className="cg-detail-row">
+                        <span>Group Name</span>
+                        <strong style={{ fontWeight: 600 }}>{groupName}</strong>
                       </div>
-                    ))}
+                      <div className="cg-detail-row">
+                        <span>Tx Hash</span>
+                        <a 
+                          href={`https://preview.cardanoscan.io/transaction/${txHash}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="cg-tx-link"
+                        >
+                          {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                        </a>
+                      </div>
+                      <div className="cg-detail-row">
+                        <span>On-Chain Status</span>
+                        <span className="cg-status-badge active-status">Active</span>
+                      </div>
+                    </div>
+
+                    <div className="cg-verification-actions">
+                      <button 
+                        className="btn btn-dark cg-go-btn"
+                        onClick={() => {
+                          if (createdGroupId) {
+                            onCreated(createdGroupId);
+                          } else {
+                            onCreated();
+                          }
+                        }}
+                      >
+                        Go to Group
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {verificationPhase === "failed" && (
+                  <div className="cg-verification-state failed">
+                    <div className="cg-failed-cross">
+                      <span className="material-symbols-outlined cg-failed-icon" style={{ fontSize: 64, color: "var(--color-warning)" }}>warning</span>
+                    </div>
+                    <h3 className="text-headline-sm" style={{ marginTop: 24, textAlign: 'center', color: "var(--color-warning)" }}>Verification Delay</h3>
+                    <p className="text-body-md cg-verification-subtitle" style={{ textAlign: 'center', maxWidth: 440, margin: '8px auto 24px auto', color: 'var(--color-zinc-400)' }}>
+                      Cardano block confirmation is taking longer than expected. Do not worry, your group will activate as soon as the tx settles!
+                    </p>
+
+                    <div className="cg-verification-details">
+                      <div className="cg-detail-row">
+                        <span>Group Name</span>
+                        <strong style={{ fontWeight: 600 }}>{groupName}</strong>
+                      </div>
+                      <div className="cg-detail-row">
+                        <span>Tx Hash</span>
+                        <a 
+                          href={`https://preview.cardanoscan.io/transaction/${txHash}`} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="cg-tx-link"
+                        >
+                          {txHash.slice(0, 10)}...{txHash.slice(-8)}
+                          <span className="material-symbols-outlined" style={{ fontSize: 14 }}>open_in_new</span>
+                        </a>
+                      </div>
+                      <div className="cg-detail-row">
+                        <span>Fallback</span>
+                        <span>Auto-activating in background...</span>
+                      </div>
+                    </div>
+
+                    <div className="cg-verification-actions" style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+                      <button 
+                        className="btn btn-secondary cg-retry-btn"
+                        onClick={() => {
+                          if (createdGroupId) {
+                            startPolling(createdGroupId);
+                          }
+                        }}
+                      >
+                        <span className="material-symbols-outlined" style={{ fontSize: 16 }}>sync</span>
+                        Keep Retrying
+                      </button>
+                      <button 
+                        className="btn btn-dark cg-dashboard-btn"
+                        onClick={() => onCreated()}
+                      >
+                        Go to Dashboard
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Payment Restored Banner */}
+                {hasPaid && localStorage.getItem(`fairshare_pending_group_fee_${userId}`) && (
+                  <div className="cg-restored-banner" style={{
+                    background: "rgba(245, 158, 11, 0.1)",
+                    border: "1px solid rgba(245, 158, 11, 0.4)",
+                    borderRadius: 12,
+                    padding: "16px 20px",
+                    marginBottom: 20,
+                    color: "#d97706",
+                    fontSize: 14,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    backdropFilter: "blur(8px)",
+                    boxShadow: "0 8px 32px 0 rgba(0, 0, 0, 0.04)"
+                  }}>
+                    <span className="material-symbols-outlined" style={{ fontSize: 24, fontVariationSettings: '"FILL" 1' }}>paid</span>
+                    <div>
+                      <strong style={{ fontWeight: 600, display: "block", marginBottom: 2 }}>Payment Restored</strong>
+                      <span>We found a paid 1.0 ADA group creation fee (tx: {txHash.slice(0, 16)}...). You can complete your group now without paying again!</span>
+                    </div>
+                  </div>
+                )}
+
+                <div className="cg-modal-grid">
+                  <div className="card cg-card">
+                    <div className="cg-identity">
+                      <div className="cg-name-field">
+                        <label className="cg-label">GROUP NAME</label>
+                        <input
+                          className={`cg-name-input${nameError ? " cg-error" : ""}`}
+                          type="text"
+                          placeholder="e.g. Summer Trip 2024"
+                          value={groupName}
+                          onChange={(e) => setGroupName(e.target.value)}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="cg-desc-block">
+                      <div className="cg-desc-header">
+                        <label className="cg-label">SHORT DESCRIPTION</label>
+                        <span className="cg-desc-count">
+                          {Math.max(0, 100 - groupDescription.length)} characters left
+                        </span>
+                      </div>
+                      <textarea
+                        className={`cg-desc-input${descriptionError ? " cg-error" : ""}`}
+                        placeholder="Add a quick note for your group..."
+                        value={groupDescription}
+                        onChange={(e) => handleDescriptionChange(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="cg-cta">
+                      <button
+                        className={`cg-pay-btn${hasPaid ? " paid" : ""}${paymentError ? " cg-error" : ""}`}
+                        onClick={handlePayment}
+                        disabled={hasPaid || isPaying || loading}
+                      >
+                        {isPaying ? "Paying..." : hasPaid ? "Paid 1.0 ADA" : "Pay 1.0 ADA"}
+                      </button>
+                      <button className="cg-create-btn" onClick={handleCreate} disabled={loading || isPaying || !hasPaid}>
+                        {loading ? "Verifying..." : "Create Group"}
+                      </button>
+                    </div>
+
+
+                    {/* Cardano Transaction & Verification Status Indicator */}
+                    {verificationStatus && (
+                      <div className="cg-status-message" style={{
+                        marginTop: 12,
+                        padding: "10px 14px",
+                        borderRadius: 8,
+                        background: "var(--color-zinc-100, #f4f4f5)",
+                        border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                        color: "var(--color-zinc-700, #3f3f46)",
+                        fontSize: 13,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                      }}>
+                        <span className="material-symbols-outlined spinner-icon" style={{
+                          fontSize: 16,
+                          color: "var(--color-primary)",
+                          animation: "spin 1.5s linear infinite",
+                          display: "inline-block"
+                        }}>sync</span>
+                        <span>{verificationStatus}</span>
+                      </div>
+                    )}
+
+                    <div className="cg-info-alert">
+                      <span className="material-symbols-outlined" style={{ color: "var(--color-tertiary)", marginTop: 2, flexShrink: 0 }}>
+                        info
+                      </span>
+                      <div>
+                        <p className="text-label-md">Split smarter with FairShare</p>
+                        <p className="text-body-md" style={{ color: "var(--color-on-surface-variant)", marginTop: 4 }}>
+                          All group expenses are tracked locally. Invite members by name and email to keep everyone in sync.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="cg-side">
+                    <div className="cg-side-card">
+                      <div className="cg-side-header">
+                        <label className="cg-label" style={{ marginBottom: 0 }}>MEMBERS</label>
+                        <button
+                          className="btn btn-secondary"
+                          style={{ fontSize: 13, padding: "6px 12px" }}
+                          onClick={() => setShowAddModal(true)}
+                        >
+                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>person_add</span>
+                          Add Member
+                        </button>
+                      </div>
+
+                      <div className="cg-member-list">
+                        {members.map((m) => (
+                          <div
+                            key={m.id}
+                            className="cg-member-row card"
+                            onMouseEnter={() => setHoveredMember(m.id)}
+                            onMouseLeave={() => setHoveredMember(null)}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                              {m.avatar ? (
+                                <img src={m.avatar} alt={m.name} className="cg-member-avatar" />
+                              ) : (
+                                <div className="cg-member-avatar-placeholder">
+                                  <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+                                    {m.isOwner ? "person" : "person_add"}
+                                  </span>
+                                </div>
+                              )}
+                              <div>
+                                <p className="text-label-md">{m.name}</p>
+                                <p className="text-label-sm" style={{ color: "var(--color-zinc-400)", marginTop: 2 }}>
+                                  {m.email}
+                                </p>
+                              </div>
+                            </div>
+
+                            {m.isOwner ? (
+                              <span className="cg-creator-badge">Creator</span>
+                            ) : (
+                              <button
+                                className="cg-delete-btn"
+                                style={{ opacity: hoveredMember === m.id ? 1 : 0 }}
+                                onClick={() => confirmDelete(m.id)}
+                              >
+                                <span className="material-symbols-outlined" style={{ fontSize: 18 }}>person_remove</span>
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -436,3 +436,245 @@
   font-size: 13px;
   line-height: 1.5;
 }
+
+/* ── Live Verification Screen ────────────────────────────────────────────── */
+.cg-verification-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  background: var(--color-surface, #fff);
+  border-radius: var(--radius-xl);
+}
+
+.cg-verification-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 500px;
+}
+
+/* Pulsing Loader Animation */
+.cg-pulse-loader {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cg-pulse-icon {
+  font-size: 36px;
+  color: var(--color-tertiary);
+  z-index: 2;
+  animation: pulse-gear 2.5s ease-in-out infinite;
+}
+
+.cg-pulse-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.12); /* purple translucent */
+  animation: pulse-ring 2.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+  z-index: 1;
+}
+
+.cg-pulse-ring-outer {
+  position: absolute;
+  width: 120%;
+  height: 120%;
+  border-radius: 50%;
+  background: rgba(124, 58, 237, 0.05);
+  animation: pulse-ring 2.5s cubic-bezier(0.215, 0.610, 0.355, 1) infinite;
+  animation-delay: 0.5s;
+  z-index: 0;
+}
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.65);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes pulse-gear {
+  0%, 100% {
+    transform: rotate(0deg) scale(0.95);
+    opacity: 0.8;
+  }
+  50% {
+    transform: rotate(180deg) scale(1.05);
+    opacity: 1;
+  }
+}
+
+/* Success Checkmark & Celebration */
+.cg-success-checkmark {
+  width: 90px;
+  height: 90px;
+  background: rgba(16, 185, 129, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
+  animation: scale-up 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.cg-success-icon {
+  font-size: 54px !important;
+  color: #10b981;
+}
+
+/* Failed Alert */
+.cg-failed-cross {
+  width: 90px;
+  height: 90px;
+  background: rgba(245, 158, 11, 0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(245, 158, 11, 0.2);
+  animation: scale-up 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+}
+
+.cg-failed-icon {
+  font-size: 54px !important;
+  color: #f59e0b;
+}
+
+@keyframes scale-up {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Verification Details card */
+.cg-verification-details {
+  width: 100%;
+  background: var(--color-surface-container-low, #f8fafc);
+  border: 1px solid var(--color-zinc-200, #e2e8f0);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.cg-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+  color: var(--color-secondary, #475569);
+}
+
+.cg-detail-row span:first-child {
+  font-weight: 500;
+  color: var(--color-zinc-500, #64748b);
+}
+
+.cg-tx-link {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-tertiary);
+  font-family: monospace;
+  font-weight: 600;
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--color-tertiary-light);
+  transition: opacity 0.2s;
+}
+
+.cg-tx-link:hover {
+  opacity: 0.8;
+}
+
+.cg-timer-val {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #000;
+  font-size: 16px;
+}
+
+/* Badges */
+.cg-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cg-status-badge.pending {
+  background: rgba(245, 158, 11, 0.1);
+  color: #d97706;
+}
+
+.cg-status-badge.active-status {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+
+/* Action Buttons */
+.cg-verification-actions {
+  width: 100%;
+}
+
+.cg-verification-actions .btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 16px 24px;
+  border-radius: var(--radius-xl);
+  font-size: 16px;
+  font-weight: 600;
+  width: 100%;
+}
+
+.cg-minimize-btn {
+  background: var(--color-zinc-100, #f1f5f9) !important;
+  color: var(--color-secondary, #334155) !important;
+  border: 1px solid var(--color-zinc-200, #cbd5e1) !important;
+}
+
+.cg-minimize-btn:hover {
+  background: var(--color-zinc-200, #e2e8f0) !important;
+}
+
+.cg-go-btn {
+  background: var(--color-tertiary) !important;
+  color: #fff !important;
+  box-shadow: var(--shadow-purple);
+}
+
+.cg-go-btn:hover {
+  opacity: 0.9;
+}
+
+.cg-retry-btn {
+  background: var(--color-zinc-100) !important;
+  color: #000 !important;
+}
+
