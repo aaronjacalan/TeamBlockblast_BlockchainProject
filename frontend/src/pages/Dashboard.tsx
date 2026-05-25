@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useLovelace } from "@meshsdk/react";
 import "./Dashboard.css";
 import { CURRENCY } from "../data";
@@ -6,6 +6,7 @@ import { CURRENCY } from "../data";
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
 interface DashboardProps {
+  userId?: string;
   onNavigate: (page: Page) => void;
   onCreateGroup: () => void;
   onSelectGroup: (groupId: string) => void;
@@ -17,6 +18,7 @@ interface DashboardProps {
 }
 
 const Dashboard: React.FC<DashboardProps> = ({
+  userId,
   onNavigate,
   onCreateGroup,
   onSelectGroup,
@@ -26,6 +28,83 @@ const Dashboard: React.FC<DashboardProps> = ({
 }) => {
   const lovelace = useLovelace();
   const walletBalance = lovelace ? (parseInt(lovelace) / 1_000_000).toFixed(2) : "0.00";
+
+  // State to load all expenses in the background to calculate true statistics
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [loadingExpenses, setLoadingExpenses] = useState(true);
+  const [activeTab, setActiveTab] = useState<"spend" | "audit">("spend");
+
+  useEffect(() => {
+    if (!userId || groups.length === 0) {
+      setLoadingExpenses(false);
+      return;
+    }
+
+    let isMounted = true;
+    const fetchAllExpenses = async () => {
+      try {
+        const promises = groups.map(async (g) => {
+          const res = await fetch(`/api/expenses/?group_id=${g.id}`);
+          if (!res.ok) return [];
+          const data = await res.json();
+          return Array.isArray(data) ? data : [];
+        });
+
+        const results = await Promise.all(promises);
+        const allExpenses = results.flat();
+
+        if (isMounted) {
+          setExpenses(allExpenses);
+          setLoadingExpenses(false);
+        }
+      } catch (err) {
+        console.error("Error fetching dashboard expenses:", err);
+        if (isMounted) setLoadingExpenses(false);
+      }
+    };
+
+    fetchAllExpenses();
+    return () => {
+      isMounted = false;
+    };
+  }, [userId, groups]);
+
+  // Compute stats dynamically from the actual user & group data
+  const groupSpent = groups
+    .map((g) => {
+      const spentInGroup = expenses
+        .filter((e) => e.group_id === g.id && e.paid_by === userId)
+        .reduce((sum, e) => sum + e.amount, 0);
+      return { name: g.name, amount: spentInGroup };
+    })
+    .filter((item) => item.amount > 0);
+
+  const totalPersonalOwed = summary.you_are_owed;
+  const totalPersonalOwes = summary.you_owe;
+  const totalImbalance = totalPersonalOwed + totalPersonalOwes;
+
+  const personalVolume = expenses.reduce((sum, e) => {
+    const isPaidByMe = e.paid_by === userId;
+    const isOwedByMe = e.expense_splits?.some((s: any) => s.user_id === userId);
+    return isPaidByMe || isOwedByMe ? sum + e.amount : sum;
+  }, 0);
+
+  const fairnessIndex = personalVolume > 0
+    ? Math.max(0, Math.min(100, Math.round((1 - totalImbalance / (personalVolume + 1)) * 100)))
+    : 100;
+
+  const settledSplitsCount = expenses.reduce((sum, e) => {
+    const settledInExpense = e.expense_splits?.filter((s: any) => s.is_settled && s.user_id === userId).length || 0;
+    return sum + settledInExpense;
+  }, 0);
+
+  const activeGroupsCount = groups.filter((g) => g.status === "active").length;
+  const totalFeesPaid = activeGroupsCount * 1.0;
+
+  const outstandingSettlementsCount = expenses.reduce((sum, e) => {
+    const activeInExpense = e.expense_splits?.filter((s: any) => !s.is_settled && s.user_id === userId && e.paid_by !== userId).length || 0;
+    return sum + activeInExpense;
+  }, 0);
 
   return (
     <main className="dashboard page-offset">
@@ -66,21 +145,96 @@ const Dashboard: React.FC<DashboardProps> = ({
               </div>
             </div>
 
-            <div className="db-insight-card">
-              <img
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuA6f2tr7lvTdlQIUGsEfht6vBTdckrpLDjgTK9CDkM09aJvHzQ5vcKKiB8Sg6qRNZYD_zTx165pQVrOn4V3FvhZ4-McmmMIT4IkkHRDffUlpC5tylIZsW3X2laljA3-7G6eCSZ6PXEuxivD_o6ULNuEDxU4ajDF42C1SmXleyiXomXBaJCF4xfAFrXPD_IVictH_BQkXFvTdw9yeqDtF5jv1dLAkTz20tb6su7RNqRcXeNLvCIl-5JUTDRgLVIMiat0sj1l92yELkCY"
-                alt="Portfolio visual"
-                className="db-insight-img"
-              />
-              <div className="db-insight-overlay" />
-              <div className="db-insight-text">
-                <span className="text-label-sm" style={{ opacity: 0.8, letterSpacing: "0.08em", textTransform: "uppercase" }}>
-                  Monthly Summary
+            <div className="card card-p db-analytics-card" style={{ background: "#fff", border: "1px solid var(--color-zinc-200)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--color-zinc-100)", paddingBottom: 12, marginBottom: 12 }}>
+                <span className="text-label-sm" style={{ letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 700, color: "var(--color-zinc-500)" }}>
+                  Web3 Analytics
                 </span>
-                <p className="text-headline-sm" style={{ lineHeight: 1.3, marginTop: 4 }}>
-                  Your balance increased by 12% this month.
-                </p>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <button
+                    className={`btn ${activeTab === "spend" ? "btn-primary" : "btn-ghost"}`}
+                    style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6 }}
+                    onClick={() => setActiveTab("spend")}
+                  >
+                    Spend
+                  </button>
+                  <button
+                    className={`btn ${activeTab === "audit" ? "btn-primary" : "btn-ghost"}`}
+                    style={{ padding: "4px 8px", fontSize: 11, borderRadius: 6 }}
+                    onClick={() => setActiveTab("audit")}
+                  >
+                    Audit
+                  </button>
+                </div>
               </div>
+
+              {activeTab === "spend" ? (
+                <div style={{ display: "flex", gap: 16, alignItems: "center", height: "100%" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                    <svg viewBox="0 0 100 100" width="76" height="76">
+                      <circle cx="50" cy="50" r="40" stroke="var(--color-zinc-100)" stroke-width="8" fill="none" />
+                      <circle cx="50" cy="50" r="40" stroke="var(--color-tertiary)" stroke-width="8" fill="none"
+                              stroke-dasharray="251.2" stroke-dashoffset={251.2 - (251.2 * fairnessIndex) / 100}
+                              stroke-linecap="round" style={{ transition: "stroke-dashoffset 0.5s ease" }} />
+                      <text x="50" y="56" text-anchor="middle" font-size="16" font-weight="bold" fill="var(--color-zinc-800)">
+                        {fairnessIndex}%
+                      </text>
+                    </svg>
+                    <span style={{ fontSize: 10, color: "var(--color-zinc-400)", marginTop: 4, textTransform: "uppercase", fontWeight: 600 }}>Fairness</span>
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <span style={{ fontSize: 12, color: "var(--color-zinc-500)", fontWeight: 600 }}>Group Spend (Paid by You)</span>
+                    {loadingExpenses ? (
+                      <div style={{ fontSize: 12, color: "var(--color-zinc-400)", marginTop: 8 }}>Analyzing Ledger...</div>
+                    ) : groupSpent.length === 0 ? (
+                      <div style={{ fontSize: 12, color: "var(--color-zinc-400)", marginTop: 8 }}>No logged spending found.</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8 }}>
+                        {groupSpent.slice(0, 2).map((item) => {
+                          const maxSpent = Math.max(...groupSpent.map(i => i.amount), 1);
+                          const percentage = (item.amount / maxSpent) * 100;
+                          return (
+                            <div key={item.name}>
+                              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 2 }}>
+                                <span style={{ fontWeight: 600, color: "var(--color-zinc-700)" }}>{item.name}</span>
+                                <span style={{ color: "var(--color-tertiary)", fontWeight: 700 }}>{item.amount} ADA</span>
+                              </div>
+                              <div style={{ height: 6, background: "var(--color-zinc-100)", borderRadius: 3, overflow: "hidden" }}>
+                                <div style={{ height: "100%", width: `${percentage}%`, background: "linear-gradient(to right, var(--color-tertiary), var(--color-tertiary-container))", borderRadius: 3 }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", height: "100%" }}>
+                  <span style={{ fontSize: 11, color: "var(--color-zinc-500)", fontWeight: 600 }}>Cardano Ledger Statistics</span>
+                  {loadingExpenses ? (
+                    <div style={{ fontSize: 12, color: "var(--color-zinc-400)", marginTop: 8 }}>Loading stats...</div>
+                  ) : (
+                    <div className="web3-stats-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 8 }}>
+                      <div className="web3-stat-item" style={{ textAlign: "center", padding: "8px 4px", background: "rgba(115, 46, 228, 0.04)", borderRadius: 6, border: "1px solid rgba(115, 46, 228, 0.08)" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--color-tertiary)" }}>verified_user</span>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--color-zinc-800)", margin: "2px 0" }}>{settledSplitsCount}</div>
+                        <div style={{ fontSize: 9, color: "var(--color-zinc-500)", textTransform: "uppercase", fontWeight: 600 }}>Settled</div>
+                      </div>
+                      <div className="web3-stat-item" style={{ textAlign: "center", padding: "8px 4px", background: "rgba(115, 46, 228, 0.04)", borderRadius: 6, border: "1px solid rgba(115, 46, 228, 0.08)" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--color-tertiary)" }}>toll</span>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--color-zinc-800)", margin: "2px 0" }}>{totalFeesPaid.toFixed(1)}</div>
+                        <div style={{ fontSize: 9, color: "var(--color-zinc-500)", textTransform: "uppercase", fontWeight: 600 }}>Fees (ADA)</div>
+                      </div>
+                      <div className="web3-stat-item" style={{ textAlign: "center", padding: "8px 4px", background: "rgba(115, 46, 228, 0.04)", borderRadius: 6, border: "1px solid rgba(115, 46, 228, 0.08)" }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--color-tertiary)" }}>pending_actions</span>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "var(--color-zinc-800)", margin: "2px 0" }}>{outstandingSettlementsCount}</div>
+                        <div style={{ fontSize: 9, color: "var(--color-zinc-500)", textTransform: "uppercase", fontWeight: 600 }}>Pending</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </section>

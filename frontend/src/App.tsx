@@ -230,6 +230,7 @@ const App: React.FC = () => {
 
       {currentPage === "dashboard" && (
         <Dashboard
+          userId={userId}
           groups={groups}
           activities={activities}
           summary={summary}
