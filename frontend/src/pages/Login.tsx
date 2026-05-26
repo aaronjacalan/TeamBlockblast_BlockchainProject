@@ -5,9 +5,10 @@ import "./Login.css";
 
 interface LoginProps {
   onLogin: (user: any, walletName: string) => void;
+  onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = ({ onLogin, onShowToast }) => {
   const [availableWallets, setAvailableWallets] = useState<string[]>([]);
   const [selectedWallet, setSelectedWallet] = useState<string>("Disconnected");
   const [loading, setLoading] = useState(false);
@@ -37,7 +38,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const connectWallet = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedWallet === "Disconnected") {
-      alert("Please select a wallet first!");
+      onShowToast("Please select a Cardano wallet first!", "warning");
       return;
     }
 
@@ -82,7 +83,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     }
     } catch (error) {
       console.error("Error connecting to wallet:", error);
-      alert("Failed to connect wallet. Please try again.");
+      onShowToast("Failed to connect wallet. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -130,7 +131,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       onLogin(updatedUser, selectedWallet);
     } catch (error) {
       console.error("Error saving profile:", error);
-      alert("Failed to save profile. Please try again.");
+      onShowToast("Failed to save profile. Please try again.", "error");
     } finally {
       setProfileLoading(false);
     }

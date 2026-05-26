@@ -64,3 +64,71 @@ def recalculate_splits_for_group(group_id: str):
                 print(f"deleted split for {uid}")
 
     print("=== RECALCULATE DONE ===")
+
+
+import os
+import requests
+from fastapi import HTTPException
+
+def verify_transaction_payment(tx_hash: str, target_address: str, expected_amount_ada: float) -> bool:
+    """
+    Queries Blockfrost to verify that the transaction with tx_hash exists 
+    and has an output sending at least expected_amount_ada to target_address.
+    """
+    api_key = os.getenv("BLOCKFROST_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=500,
+            detail="Backend configuration error: BLOCKFROST_API_KEY is not defined in backend environment."
+        )
+
+    api_key = "".join(api_key.split())
+    network = "preview" if api_key.startswith("preview") else "mainnet"
+    base_url = f"https://cardano-{network}.blockfrost.io/api/v0"
+    headers = {"project_id": api_key}
+
+    expected_lovelaces = int(round(expected_amount_ada * 1_000_000))
+    target_address = target_address.strip()
+
+    # 1. Fetch transaction UTXOs
+    utxo_url = f"{base_url}/txs/{tx_hash}/utxos"
+    try:
+        res = requests.get(utxo_url, headers=headers, timeout=10)
+        if res.status_code == 200:
+            data = res.json()
+            for output in data.get("outputs", []):
+                print(f"  Comparing output address: '{output.get('address')}' vs target: '{target_address}'")
+                if output.get("address") == target_address:
+                    for amount_item in output.get("amount", []):
+                        if amount_item.get("unit") == "lovelace":
+                            quantity = int(amount_item.get("quantity", 0))
+                            # Add a small buffer of 5000 Lovelaces (0.005 ADA) to handle minor float roundings
+                            if quantity >= (expected_lovelaces - 5000):
+                                print(f"[VERIFIED] Found output of {quantity} Lovelaces to {target_address}")
+                                return True
+            print(f"[FAILED] Could not find output matching {expected_lovelaces} Lovelaces to {target_address}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Payment verification failed: No transaction output was found sending at least {expected_amount_ada} ADA to {target_address}."
+            )
+        elif res.status_code == 404:
+            # Fallback to checking the mempool for presence
+            mempool_url = f"{base_url}/mempool/{tx_hash}"
+            mempool_res = requests.get(mempool_url, headers=headers, timeout=10)
+            if mempool_res.status_code == 200:
+                print(f"[MEMPOOL] Transaction {tx_hash} is pending in the mempool. Accepting for fast settlement.")
+                return True
+            raise HTTPException(
+                status_code=400,
+                detail="Payment verification failed: Transaction hash not found in blocks or mempool. Please wait a few seconds and try again."
+            )
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Blockchain lookup returned error code {res.status_code}."
+            )
+    except requests.RequestException as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Failed to communicate with Blockfrost API: {str(e)}"
+        )

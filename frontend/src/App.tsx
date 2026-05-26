@@ -21,9 +21,24 @@ type Page =
   | "create-group"
   | "settings";
 
+interface Toast {
+  id: string;
+  message: string;
+  type: "success" | "error" | "warning" | "info";
+}
+
 const App: React.FC = () => {
   const { setWallet } = useWallet();
   const [currentPage, setCurrentPage] = useState<Page>("landing");
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = (message: string, type: "success" | "error" | "warning" | "info" = "info") => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  };
   const [userId, setUserId] = useState("");
   const [walletAddress, setWalletAddress] = useState("");
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
@@ -183,6 +198,7 @@ const App: React.FC = () => {
 
       {currentPage === "login" && (
        <Login
+        onShowToast={showToast}
         onLogin={async (user: any, walletName: string) => {
           setUserId(user.id);
           setWalletAddress(user.stake_address);
@@ -214,6 +230,7 @@ const App: React.FC = () => {
 
       {currentPage === "dashboard" && (
         <Dashboard
+          userId={userId}
           groups={groups}
           activities={activities}
           summary={summary}
@@ -237,11 +254,16 @@ const App: React.FC = () => {
       {createGroupOpen && (
         <CreateGroup
           userId={userId}
+          onShowToast={showToast}
           onClose={() => setCreateGroupOpen(false)}
-          onCreated={async () => {
+          onCreated={async (groupId?: string) => {
             await fetchGroups();
             setCreateGroupOpen(false);
-            navigate("groups");
+            if (groupId) {
+              navigateToGroup(groupId);
+            } else {
+              navigate("groups");
+            }
           }}
         />
       )}
@@ -250,12 +272,14 @@ const App: React.FC = () => {
         <GroupDetails
           groupId={selectedGroupId}
           userId={userId}
+          onShowToast={showToast}
           onExpenseAdded={async () => {
             await fetchActivities(userId);
             await fetchSummary(userId);
           }}
           onGroupStatusChanged={async () => {
             await fetchGroups(userId);
+            await fetchActivities(userId);
           }}
         />
       )}
@@ -267,6 +291,7 @@ const App: React.FC = () => {
           displayName={displayName}
           email={email}
           onNavigate={navigate}
+          onShowToast={showToast}
           onProfileUpdate={(newDisplayName, newEmail) => {
             setDisplayName(newDisplayName);
             setEmail(newEmail);
@@ -291,6 +316,7 @@ const App: React.FC = () => {
         <NotificationModal
           onClose={() => setNotificationsOpen(false)}
           userId={userId}
+          onShowToast={showToast}
           onInviteAccepted={async () => {
             await fetchGroups(userId);
             await fetchActivities(userId);
@@ -298,6 +324,105 @@ const App: React.FC = () => {
           }}
         />
       )}
+
+      {/* Premium Toast Container */}
+      <div
+        style={{
+          position: "fixed",
+          bottom: "24px",
+          right: "24px",
+          zIndex: 9999,
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          pointerEvents: "none",
+          maxWidth: "400px",
+          width: "calc(100% - 48px)",
+        }}
+      >
+        {toasts.map((t) => {
+          const colorMap = {
+            success: { border: "#10b981", icon: "check_circle", color: "#064e3b" },
+            error: { border: "#f43f5e", icon: "error", color: "#9f1239" },
+            warning: { border: "#f59e0b", icon: "warning", color: "#78350f" },
+            info: { border: "#6366f1", icon: "info", color: "#1e1b4b" },
+          };
+          const { border, icon, color } = colorMap[t.type];
+          return (
+            <div
+              key={t.id}
+              style={{
+                pointerEvents: "auto",
+                background: "rgba(255, 255, 255, 0.85)",
+                backdropFilter: "blur(16px)",
+                WebkitBackdropFilter: "blur(16px)",
+                borderLeft: `4px solid ${border}`,
+                borderRadius: "12px",
+                padding: "16px 20px",
+                boxShadow: "0 12px 32px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04)",
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+                animation: "toast-slide-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                border: "1px solid rgba(0, 0, 0, 0.06)",
+                borderLeftWidth: "4px",
+                color: color,
+                fontFamily: "var(--font-family, sans-serif)",
+                fontSize: "14px",
+                fontWeight: 600,
+                lineHeight: "1.4",
+                boxSizing: "border-box",
+                transition: "all 0.3s ease",
+              }}
+            >
+              <span
+                className="material-symbols-outlined"
+                style={{
+                  color: border,
+                  fontSize: "22px",
+                  fontVariationSettings: '"FILL" 1',
+                  flexShrink: 0,
+                }}
+              >
+                {icon}
+              </span>
+              <div style={{ flexGrow: 1, whiteSpace: "pre-line" }}>{t.message}</div>
+              <button
+                onClick={() => setToasts((prev) => prev.filter((item) => item.id !== t.id))}
+                style={{
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  color: "#a1a1aa",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: "50%",
+                  transition: "all 0.2s",
+                }}
+              >
+                <span className="material-symbols-outlined" style={{ fontSize: "16px" }}>
+                  close
+                </span>
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <style>{`
+        @keyframes toast-slide-in {
+          from {
+            transform: translateX(120%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </>
   );
 };

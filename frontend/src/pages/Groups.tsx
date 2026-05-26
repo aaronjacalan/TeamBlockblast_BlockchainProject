@@ -68,7 +68,41 @@ const Groups: React.FC<GroupsProps> = ({ onCreateGroup, onSelectGroup, groups })
                   onClick={() => onSelectGroup(g.id)}
                 >
                   <div className="groups-card-top">
-                    <span className="badge badge-purple">Active</span>
+                    {g.status === "inactive" ? (
+                      <span className="badge badge-warning" style={{
+                        background: "rgba(245, 158, 11, 0.1)",
+                        color: "#d97706",
+                        border: "1px solid rgba(245, 158, 11, 0.3)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 500
+                      }}>
+                        <span className="material-symbols-outlined spinner-icon" style={{ fontSize: 13, animation: "spin 1.5s linear infinite" }}>sync</span>
+                        Verifying Payment
+                      </span>
+                    ) : g.status === "payment_failed" ? (
+                      <span className="badge" style={{
+                        background: "rgba(239, 68, 68, 0.1)",
+                        color: "#dc2626",
+                        border: "1px solid rgba(239, 68, 68, 0.3)",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: 500
+                      }}>
+                        <span className="material-symbols-outlined" style={{ fontSize: 13 }}>error</span>
+                        Payment Failed
+                      </span>
+                    ) : (
+                      <span className="badge badge-purple">Active</span>
+                    )}
                   </div>
                   <h3 className="text-headline-sm groups-card-title">{g.name}</h3>
                   <p className="text-body-md" style={{ color: "var(--color-zinc-400)", marginTop: 4 }}>

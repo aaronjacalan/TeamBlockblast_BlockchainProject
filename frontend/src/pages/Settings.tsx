@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 
 type Page = "landing" | "login" | "dashboard" | "groups" | "group-details" | "create-group" | "settings";
 
@@ -9,6 +9,7 @@ interface SettingsProps {
   email: string;
   onNavigate: (page: Page) => void;
   onProfileUpdate: (displayName: string, email: string) => void;
+  onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({
@@ -18,6 +19,7 @@ const Settings: React.FC<SettingsProps> = ({
   email: initialEmail,
   onNavigate,
   onProfileUpdate,
+  onShowToast,
 }) => {
   const [email, setEmail] = useState(initialEmail);
   const [displayName, setDisplayName] = useState(initialDisplayName);
@@ -36,9 +38,10 @@ const Settings: React.FC<SettingsProps> = ({
       if (!res.ok) throw new Error("Failed to save");
       setSaved(true);
       onProfileUpdate(displayName.trim(), email.trim());
+      onShowToast("Profile changes saved successfully!", "success");
       setTimeout(() => setSaved(false), 2500);
     } catch (err) {
-      alert("Failed to save email. Please try again.");
+      onShowToast("Failed to save email/name changes. Please try again.", "error");
     }
   };
 

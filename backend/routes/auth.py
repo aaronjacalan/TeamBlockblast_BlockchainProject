@@ -70,8 +70,6 @@ def verify_signature(data: VerifyRequest):
 
     user = result.data[0]
     print("VERIFY USER:", user)
-    if not result.data:
-        raise HTTPException(status_code=404, detail="User not found")
 
     if not user.get("auth_nonce") or not user.get("nonce_expires_at"):
         raise HTTPException(status_code=400, detail="No active nonce, request one first")

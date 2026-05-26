@@ -1,12 +1,13 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from database import supabase
 import secrets
 from datetime import datetime, timedelta, timezone
-from routes.utils import recalculate_splits_for_group
+from routes.utils import recalculate_splits_for_group, verify_transaction_payment
 import requests
 import os
+import time
 
 router = APIRouter()
 
@@ -17,7 +18,9 @@ class GroupCreate(BaseModel):
     image_url: Optional[str] = ""
     created_by: str  # user uuid
     tx_hash: str     # transaction hash of the 1.0 ADA creation fee
-    blockfrost_api_key: str  # Blockfrost key passed from the frontend
+    status: Optional[str] = "inactive"
+    initial_members: Optional[List[str]] = []
+
 
 
 class GroupInviteCreate(BaseModel):
@@ -30,61 +33,8 @@ class InviteByEmail(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def verify_cardano_tx(tx_hash: str, blockfrost_api_key: str) -> bool:
-    """
-    Verifies that a Cardano transaction exists in the blockchain (either 
-    already minted in a block, or currently pending in the mempool).
-    This ensures instant validation without making the user wait for on-chain block minting.
-    """
-    raw_address = os.getenv("FAIRSHARE_ADDRESS")
-    if not blockfrost_api_key or not raw_address:
-        raise HTTPException(
-            status_code=500,
-            detail="Backend configuration error: BLOCKFROST_API_KEY (from frontend) or FAIRSHARE_ADDRESS is missing."
-        )
-
-    # Clean all whitespaces from target address and key
-    fairshare_address = "".join(raw_address.split())
-
-    # Clean all whitespaces from the API key (including spaces in the middle)
-    api_key = "".join(blockfrost_api_key.split())
-    network = "preview" if api_key.startswith("preview") else "mainnet"
-    base_url = f"https://cardano-{network}.blockfrost.io/api/v0"
-
-    headers = {"project_id": api_key}
-
-    # 1. First, check if the transaction is already minted in a block
-    tx_url = f"{base_url}/txs/{tx_hash}"
-    try:
-        response = requests.get(tx_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            print(f"\n[BLOCKFROST] Transaction {tx_hash} verified: Already minted in a block.")
-            return True
-    except requests.RequestException:
-        pass  # Fallback to mempool check if the network call itself fails or times out
-
-    # 2. If not minted yet, check if it is pending in the mempool
-    mempool_url = f"{base_url}/mempool/{tx_hash}"
-    try:
-        response = requests.get(mempool_url, headers=headers, timeout=10)
-        if response.status_code == 200:
-            print(f"\n[BLOCKFROST] Transaction {tx_hash} verified: Pending in the mempool.")
-            return True
-        elif response.status_code == 404:
-            raise HTTPException(
-                status_code=400,
-                detail="Payment verification failed: Transaction hash not found in blocks or mempool. Please wait a few seconds and try again."
-            )
-        else:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Cardano blockchain lookup failed via Blockfrost (Status code: {response.status_code})."
-            )
-    except requests.RequestException as e:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Failed to check blockchain status due to a connection issue with Blockfrost: {str(e)}"
-        )
+def verify_cardano_tx(tx_hash: str) -> bool:
+    return verify_transaction_payment(tx_hash, os.getenv("FAIRSHARE_ADDRESS"), 1.0)
 
 
 
@@ -155,8 +105,175 @@ def get_group(group_id: str):
     return result.data
 
 
+class GroupUpdate(BaseModel):
+    name: str
+    description: Optional[str] = ""
+    requester_id: str
+
+
+@router.put("/{group_id}")
+def update_group(group_id: str, data: GroupUpdate):
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Group name is required")
+        
+    # Check if group exists
+    group_res = supabase.table("groups").select("*").eq("id", group_id).execute()
+    if not group_res.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+        
+    group = group_res.data[0]
+    
+    # Check authorization: requester must be a member
+    member_res = supabase.table("group_members").select("id").eq("group_id", group_id).eq("user_id", data.requester_id).execute()
+    if not member_res.data and group.get("created_by") != data.requester_id:
+        raise HTTPException(status_code=403, detail="Not authorized to edit this group")
+        
+    # Perform update in database
+    supabase.table("groups").update({
+        "name": data.name.strip(),
+        "description": data.description.strip(),
+    }).eq("id", group_id).execute()
+    
+    return get_group(group_id)
+
+
+def send_group_invite_by_email(group_id: str, email: str, invited_by: str, group_name: str):
+    try:
+        # find user by email
+        user_result = supabase.table("users").select("id").eq("email", email.strip()).execute()
+        if not user_result.data:
+            print(f"[INVITE WARNING] User with email {email} not found. Invite skipped.")
+            return
+
+        invited_user_id = user_result.data[0]["id"]
+
+        # check if already a member
+        existing = (
+            supabase.table("group_members")
+            .select("id")
+            .eq("group_id", group_id)
+            .eq("user_id", invited_user_id)
+            .execute()
+        )
+        if existing.data:
+            return
+
+        # check if already invited
+        existing_notif = (
+            supabase.table("notifications")
+            .select("id")
+            .eq("user_id", invited_user_id)
+            .eq("type", "group_invite")
+            .eq("metadata->>group_id", group_id)
+            .execute()
+        )
+        if existing_notif.data:
+            return
+
+        # create notification for the invited user
+        supabase.table("notifications").insert({
+            "user_id": invited_user_id,
+            "type": "group_invite",
+            "title": "Group Invite",
+            "message": f"You've been invited to join \"{group_name}\"",
+            "metadata": {
+                "group_id": group_id,
+                "invited_by": invited_by,
+            }
+        }).execute()
+        print(f"[INVITE SUCCESS] Sent group invite to {email}")
+    except Exception as err:
+        print(f"[INVITE ERROR] Failed to invite {email}: {err}")
+
+
+def background_verify_group_payment(group_id: str, tx_hash: str, created_by: str, name: str, initial_members: list = None):
+    print(f"\n=== BACKGROUND GROUP VERIFICATION START: group={group_id}, tx={tx_hash} ===")
+    verified = False
+    for attempt in range(1, 6):
+        print(f"  [Attempt {attempt}/5] Verifying transaction on Cardano blockchain...")
+        try:
+            if verify_cardano_tx(tx_hash):
+                verified = True
+                break
+        except Exception as e:
+            print(f"  [Attempt {attempt}/5] Verification pending/failed: {str(e)}")
+        
+        if attempt < 5:
+            time.sleep(10)
+            
+    if verified:
+        print(f"  [BACKGROUND GROUP VERIFICATION SUCCESS] Group {group_id} payment verified!")
+        try:
+            # 1. Update status to active in database
+            supabase.table("groups").update({"status": "active"}).eq("id", group_id).execute()
+            
+            # 2. Record creation fee expense/splits
+            existing_expense = supabase.table("expenses").select("id").eq("tx_hash", tx_hash).execute()
+            if not existing_expense.data:
+                expense_result = supabase.table("expenses").insert({
+                    "group_id": group_id,
+                    "paid_by": created_by,
+                    "name": "Group Creation Fee",
+                    "amount": 1.0,
+                    "currency": "ADA",
+                    "split_type": "equal",
+                    "tx_status": "settled",
+                    "tx_hash": tx_hash,
+                }).execute()
+                
+                if expense_result.data:
+                    expense_id = expense_result.data[0]["id"]
+                    supabase.table("expense_splits").insert({
+                        "expense_id": expense_id,
+                        "user_id": created_by,
+                        "amount_owed": 1.0,
+                        "is_settled": True,
+                    }).execute()
+                    
+            # 3. Log activity
+            log_activity(created_by, group_id, "group_created", f"Created group \"{name}\"")
+            
+            # 4. Notify creator
+            supabase.table("notifications").insert({
+                "user_id": created_by,
+                "type": "group_activated",
+                "title": "Group Active",
+                "message": f"Success! Payment verified. Your group \"{name}\" is now active!",
+                "metadata": {
+                    "group_id": group_id,
+                    "tx_hash": tx_hash,
+                }
+            }).execute()
+
+            # 5. Send invites to initial members if any
+            if initial_members:
+                for email in initial_members:
+                    send_group_invite_by_email(group_id, email, created_by, name)
+        except Exception as err:
+            print(f"  [BACKGROUND ERROR] Failed to complete activation database writes: {err}")
+    else:
+        print(f"  [BACKGROUND GROUP VERIFICATION FAILED] Group {group_id} verification failed after 5 attempts.")
+        try:
+            # Update status to payment_failed
+            supabase.table("groups").update({"status": "payment_failed"}).eq("id", group_id).execute()
+            
+            # Notify creator of failure
+            supabase.table("notifications").insert({
+                "user_id": created_by,
+                "type": "payment_failed",
+                "title": "Group Payment Failed",
+                "message": f"We could not verify the 1.0 ADA fee for group \"{name}\" on-chain. Marked as Payment Failed.",
+                "metadata": {
+                    "group_id": group_id,
+                    "tx_hash": tx_hash,
+                }
+            }).execute()
+        except Exception as err:
+            print(f"  [BACKGROUND ERROR] Failed to record payment failure: {err}")
+
+
 @router.post("/")
-def create_group(data: GroupCreate):
+def create_group(data: GroupCreate, background_tasks: BackgroundTasks):
     if not data.name.strip():
         raise HTTPException(status_code=400, detail="Group name is required")
 
@@ -165,9 +282,6 @@ def create_group(data: GroupCreate):
 
     if not data.tx_hash.strip():
         raise HTTPException(status_code=400, detail="Transaction hash for the 1.0 ADA creation fee is required")
-
-    if not data.blockfrost_api_key.strip():
-        raise HTTPException(status_code=400, detail="Blockfrost API key is required from client for validation")
 
     # verify user exists
     user_result = supabase.table("users").select("id").eq("id", data.created_by).execute()
@@ -183,69 +297,153 @@ def create_group(data: GroupCreate):
             detail="Replay Protection: This transaction hash has already been used to create another group."
         )
 
-    # --- CARDANO ON-CHAIN VERIFICATION ---
-    # Verify that the 1.0 ADA transaction went through on-chain using the Blockfrost API passed from frontend
-    verify_cardano_tx(data.tx_hash.strip(), data.blockfrost_api_key.strip())
+    # Determine if we should verify synchronously or asynchronously
+    req_status = data.status or "inactive"
 
-    # --- PRINT CONFIRMATION TO TERMINAL ---
-    print("\n" + "="*80)
-    print(" [CARDANO FEE VERIFICATION CONFIRMED]")
-    print(f" Transaction Hash: {data.tx_hash.strip()}")
-    print(" Status: SUCCESS (1.0 ADA Verified On-Chain)")
-    print(f" Group Name: {data.name.strip()}")
-    print(f" Creator UUID: {data.created_by}")
-    print(" Action: Storing group in Supabase database...")
-    print("="*80 + "\n")
+    if req_status == "active":
+        # Synchronous verification
+        verify_transaction_payment(data.tx_hash.strip(), os.getenv("FAIRSHARE_ADDRESS"), 1.0)
 
-    # --- WRITE TO DATABASE ---
-    # 1. Create the group record in Supabase
-    group_result = supabase.table("groups").insert({
-        "name": data.name.strip(),
-        "description": data.description,
-        "image_url": data.tx_hash.strip(),  # Store the verified hash in image_url column
-        "created_by": data.created_by,
-    }).execute()
-
-    group = group_result.data[0]
-    group_id = group["id"]
-
-    # 2. Add the creator as the first group member
-    supabase.table("group_members").insert({
-        "group_id": group_id,
-        "user_id": data.created_by,
-    }).execute()
-
-    # 3. Add the Group Creation Fee of 1.0 ADA directly into the `expenses` and `expense_splits` tables.
-    # This logs the transaction payment in the expenses system.
-    try:
-        expense_result = supabase.table("expenses").insert({
-            "group_id": group_id,
-            "paid_by": data.created_by,
-            "name": "Group Creation Fee",
-            "amount": 1.0,
-            "currency": "ADA",
-            "split_type": "equal",
-            "tx_status": "settled",
-            "tx_hash": data.tx_hash.strip(),
+        # --- WRITE TO DATABASE ---
+        group_result = supabase.table("groups").insert({
+            "name": data.name.strip(),
+            "description": data.description,
+            "image_url": data.tx_hash.strip(),
+            "created_by": data.created_by,
+            "status": "active"
         }).execute()
-        
-        if expense_result.data:
-            expense_id = expense_result.data[0]["id"]
-            
-            # Create a fully settled split for the creator since they are the sole member
-            supabase.table("expense_splits").insert({
-                "expense_id": expense_id,
-                "user_id": data.created_by,
-                "amount_owed": 1.0,
-                "is_settled": True,
+
+        group = group_result.data[0]
+        group_id = group["id"]
+
+        supabase.table("group_members").insert({
+            "group_id": group_id,
+            "user_id": data.created_by,
+        }).execute()
+
+        try:
+            expense_result = supabase.table("expenses").insert({
+                "group_id": group_id,
+                "paid_by": data.created_by,
+                "name": "Group Creation Fee",
+                "amount": 1.0,
+                "currency": "ADA",
+                "split_type": "equal",
+                "tx_status": "settled",
+                "tx_hash": data.tx_hash.strip(),
             }).execute()
-    except Exception as db_err:
-        print(f"[DATABASE WARNING] Failed to record creation fee in expenses table: {str(db_err)}")
+            
+            if expense_result.data:
+                expense_id = expense_result.data[0]["id"]
+                
+                # Create a fully settled split for the creator since they are the sole member
+                supabase.table("expense_splits").insert({
+                    "expense_id": expense_id,
+                    "user_id": data.created_by,
+                    "amount_owed": 1.0,
+                    "is_settled": True,
+                }).execute()
+        except Exception as db_err:
+            print(f"[DATABASE WARNING] Failed to record creation fee in expenses table: {str(db_err)}")
 
-    # 4. Log the activity
-    log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
+        # Log the activity
+        log_activity(data.created_by, group_id, "group_created", f"Created group \"{data.name}\"")
 
-    return group
+        # Send invites to initial members if any
+        if data.initial_members:
+            for email in data.initial_members:
+                send_group_invite_by_email(group_id, email, data.created_by, data.name.strip())
+
+        return group
+    else:
+        # Asynchronous/Fast verification flow (status="inactive")
+        group_result = supabase.table("groups").insert({
+            "name": data.name.strip(),
+            "description": data.description,
+            "image_url": data.tx_hash.strip(),
+            "created_by": data.created_by,
+            "status": "inactive"
+        }).execute()
+
+        group = group_result.data[0]
+        group_id = group["id"]
+
+        supabase.table("group_members").insert({
+            "group_id": group_id,
+            "user_id": data.created_by,
+        }).execute()
+
+        # Trigger background task
+        background_tasks.add_task(
+            background_verify_group_payment,
+            group_id,
+            data.tx_hash.strip(),
+            data.created_by,
+            data.name.strip(),
+            data.initial_members
+        )
+
+        return group
+
+
+@router.post("/{group_id}/verify")
+def verify_group_payment_manually(group_id: str):
+    # Fetch group
+    group_result = supabase.table("groups").select("*").eq("id", group_id).execute()
+    if not group_result.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+        
+    group = group_result.data[0]
+    tx_hash = group.get("image_url")  # Store hash in image_url column
+    created_by = group.get("created_by")
+    name = group.get("name")
+    
+    if group.get("status") == "active":
+        return {"status": "active", "message": "Group is already active!"}
+        
+    if not tx_hash:
+        raise HTTPException(status_code=400, detail="Transaction hash is missing for this group.")
+        
+    # Verify transaction on-chain
+    is_verified = verify_cardano_tx(tx_hash)
+    
+    if is_verified:
+        # Update status to active
+        supabase.table("groups").update({"status": "active"}).eq("id", group_id).execute()
+        
+        # Create creation fee expense/splits
+        try:
+            existing_expense = supabase.table("expenses").select("id").eq("tx_hash", tx_hash).execute()
+            if not existing_expense.data:
+                expense_result = supabase.table("expenses").insert({
+                    "group_id": group_id,
+                    "paid_by": created_by,
+                    "name": "Group Creation Fee",
+                    "amount": 1.0,
+                    "currency": "ADA",
+                    "split_type": "equal",
+                    "tx_status": "settled",
+                    "tx_hash": tx_hash,
+                }).execute()
+                
+                if expense_result.data:
+                    expense_id = expense_result.data[0]["id"]
+                    supabase.table("expense_splits").insert({
+                        "expense_id": expense_id,
+                        "user_id": created_by,
+                        "amount_owed": 1.0,
+                        "is_settled": True,
+                    }).execute()
+        except Exception as db_err:
+            print(f"[DATABASE WARNING] Failed to record creation fee: {db_err}")
+            
+        log_activity(created_by, group_id, "group_created", f"Created group \"{name}\"")
+        return {"status": "active", "message": "Group payment verified and activated successfully!"}
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Transaction has not been confirmed on the Cardano blockchain yet. Please wait a few more seconds."
+        )
 
 
 

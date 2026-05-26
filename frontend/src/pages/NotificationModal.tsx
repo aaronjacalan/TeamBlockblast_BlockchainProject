@@ -6,9 +6,10 @@ interface NotificationModalProps {
   onClose: () => void;
   userId: string;
   onInviteAccepted: () => void;
+  onShowToast: (msg: string, type: "success" | "error" | "warning" | "info") => void;
 }
 
-const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, onInviteAccepted }) => {
+const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, onInviteAccepted, onShowToast }) => {
   const [activeTab, setActiveTab] = useState<"all" | "invites" | "payments">("all");
   const [notifications, setNotifications] = useState<any[]>([]);
 
@@ -45,7 +46,7 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
 
       if (!res.ok) {
         const err = await res.json();
-        alert(err.detail);
+        onShowToast(err.detail || "Failed to accept invite.", "error");
         return;
       }
 
@@ -56,8 +57,9 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
 
       await fetchNotifications();
       onInviteAccepted();
+      onShowToast("Group invitation accepted successfully!", "success");
     } catch (err) {
-      alert("Failed to accept invite.");
+      onShowToast("Failed to accept invite. Please try again.", "error");
     }
   };
 
@@ -77,8 +79,9 @@ const NotificationModal: React.FC<NotificationModalProps> = ({ onClose, userId, 
       setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
 
       await fetchNotifications();
+      onShowToast("Group invitation declined.", "info");
     } catch (err) {
-      alert("Failed to decline invite.");
+      onShowToast("Failed to decline invite. Please try again.", "error");
     }
   };
 
