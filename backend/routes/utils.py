@@ -97,6 +97,7 @@ def verify_transaction_payment(tx_hash: str, target_address: str, expected_amoun
         if res.status_code == 200:
             data = res.json()
             for output in data.get("outputs", []):
+                print(f"  Comparing output address: '{output.get('address')}' vs target: '{target_address}'")
                 if output.get("address") == target_address:
                     for amount_item in output.get("amount", []):
                         if amount_item.get("unit") == "lovelace":

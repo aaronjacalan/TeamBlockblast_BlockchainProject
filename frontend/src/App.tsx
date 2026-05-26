@@ -279,6 +279,7 @@ const App: React.FC = () => {
           }}
           onGroupStatusChanged={async () => {
             await fetchGroups(userId);
+            await fetchActivities(userId);
           }}
         />
       )}

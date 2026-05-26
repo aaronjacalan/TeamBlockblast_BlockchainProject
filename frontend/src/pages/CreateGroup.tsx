@@ -705,19 +705,11 @@ const CreateGroup: React.FC<CreateGroupProps> = ({ onClose, onCreated, userId, o
                     </div>
                   </div>
 
-                  <div className="cg-side">
-                    <div className="cg-side-card">
-                      <div className="cg-side-header">
-                        <label className="cg-label" style={{ marginBottom: 0 }}>MEMBERS</label>
-                        <button
-                          className="btn btn-secondary"
-                          style={{ fontSize: 13, padding: "6px 12px" }}
-                          onClick={() => setShowAddModal(true)}
-                        >
-                          <span className="material-symbols-outlined" style={{ fontSize: 15 }}>person_add</span>
-                          Add Member
-                        </button>
-                      </div>
+              <div className="cg-side">
+                <div className="cg-side-card">
+                  <div className="cg-side-header">
+                    <label className="cg-label" style={{ marginBottom: 0 }}>MEMBERS</label>
+                  </div>
 
                       <div className="cg-member-list">
                         {members.map((m) => (

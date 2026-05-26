@@ -405,6 +405,7 @@ const GroupDetails: React.FC<GroupDetailsProps> = ({ groupId, userId, onExpenseA
           from_user_id: userId,
           to_user_id: settleUpMemberId,
           tx_hash: txHash,
+          amount: parseFloat(settleUpAmount),
         }),
       });
       await settleRes.json();
